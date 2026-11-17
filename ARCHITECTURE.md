@@ -1,5 +1,7 @@
 # 架构笔记
 
+档位是单机工具，见 [docs/adr/0001-utility-tier.md](docs/adr/0001-utility-tier.md)。拆分、校验和备份已经落地。
+
 第一条路径：打开书目录和 PDF，改一页 Markdown，另存 reviewed 文件。
 
 ## 层

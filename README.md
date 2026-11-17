@@ -1,4 +1,4 @@
-曳光弹。核对 OCR 题页用，留下当骨架，不是可以上线的产品。MIT 许可，见 [LICENSE](LICENSE)。仓库：https://github.com/wisdom-km/md-json-review
+单机工具。核对 OCR 题页用。拆分、校验和备份已经是这个工具的功能，不是骨架。只在本机使用，不是可以上线的产品。MIT 许可，见 [LICENSE](LICENSE)。仓库：https://github.com/wisdom-km/md-json-review
 
 你在本机网页里打开一本书的 OCR 目录和原始 PDF，一页一页改 Markdown。保存时另存 `.reviewed.md` 和 `.reviewed.json`。原始 `.md` 和 `.json` 不改。
 

@@ -6,6 +6,7 @@
 
 - 跑：`py -3 serve.py`，然后打开终端打印的本机地址。默认端口 8765。和 k12-qbank 同时开时用 `py -3 serve.py --port 8766`，或设 `PORT`。`--port` 优先。
 - 测：`py -3 scripts/check.py`
+- 安装：`pip install git+https://github.com/wisdom-km/md-json-review.git@main`。没有运行时第三方依赖。setuptools 只负责打包。
 
 ## 日志
 

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/wisdom-km/md-json-review/contracts/split-rules.v1.schema.json",
+  "version": 1,
+  "title": "拆分规则",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type_patterns",
+    "option_pattern",
+    "option_keys",
+    "option_required_types",
+    "subquestion_markers",
+    "reject_on_missing_options",
+    "needs_confirm_threshold"
+  ],
+  "properties": {
+    "type_patterns": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pattern", "type"],
+        "properties": {
+          "pattern": {"type": "string", "minLength": 1},
+          "type": {
+            "enum": ["single_choice", "multiple_choice", "choice", "fill_blank", "solution"]
+          }
+        }
+      }
+    },
+    "option_pattern": {"type": "string", "minLength": 1},
+    "option_keys": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "option_required_types": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "enum": ["single_choice", "multiple_choice", "choice", "fill_blank", "solution"]
+      }
+    },
+    "subquestion_markers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "reject_on_missing_options": {"type": "boolean"},
+    "needs_confirm_threshold": {"type": "integer", "minimum": 1}
+  }
+}

@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlparse
 
 from app.dialogs import pick_path
 from app.log import JsonLogger
+from app.split_rules import load_split_rules
 from app.store import export_page, list_pages, open_book, preview_page, read_page, save_page
 from core.convert import ConvertError, refuse_drill
 
@@ -349,6 +350,11 @@ def resolve_port(argv: list[str] | None = None, environ: dict[str, str] | None =
 
 def main() -> None:
     load_env(ROOT / ".env")
+    try:
+        load_split_rules()
+    except ConvertError as exc:
+        print(f"{exc.code}：{exc.message}", flush=True)
+        raise SystemExit(1) from None
     host = require_loopback(os.environ.get("HOST", "127.0.0.1"))
     port = resolve_port()
     level = os.environ.get("MD_JSON_LOG_LEVEL", "INFO")

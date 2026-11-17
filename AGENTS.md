@@ -17,7 +17,7 @@
 - 不覆盖原始 `.md` / `.json`
 - 块数对不上不写文件，也不猜
 - 不监听 127.0.0.1 以外的地址
-- `src/core` 不读不写文件。拆分规则由 `config/split_rules.json` 读入后传入
+- `src/core` 不读不写文件。拆分规则由 `config/split_rules.json` 读入后传入。启动时按 `contracts/split-rules.v1.schema.json` 检查，失败码是 `SPLIT_RULES`，不打开端口
 - 不连接 k12-qbank，也不连接 PostgreSQL
 - 参考答案只写 `origin` 为 `ocr` 的 `k12-answer-draft`。一份文件一条答案。不写模型答案
 - 密钥不进仓库和日志

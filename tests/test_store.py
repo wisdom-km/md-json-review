@@ -42,6 +42,7 @@ class StoreTests(unittest.TestCase):
             )
             self.assertEqual(questions["contract"], "k12-question-draft")
             self.assertEqual(questions["contract_version"], 1)
+            self.assertEqual(questions["schema_version"], 1)
             self.assertEqual(questions["source"], {"pdf_page": 1})
             self.assertTrue(questions["ok"])
             self.assertEqual(questions["questions"], [])

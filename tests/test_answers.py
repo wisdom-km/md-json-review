@@ -18,6 +18,7 @@ RULES = shipped_rules()
 FILE_KEYS = {
     "contract",
     "contract_version",
+    "schema_version",
     "ok",
     "reason",
     "question_key",
@@ -87,6 +88,8 @@ class AnswerSplitTests(unittest.TestCase):
         self.assertEqual(files[0]["contract"], "k12-answer-draft")
         self.assertEqual(files[0]["contract_version"], 1)
         self.assertIs(files[0]["contract_version"], 1)
+        self.assertEqual(files[0]["schema_version"], 1)
+        self.assertIs(files[0]["schema_version"], 1)
         self.assertEqual(files[0]["origin"], "ocr")
         self.assertEqual(files[0]["status"], "confirmed")
         self.assertTrue(files[0]["applicable"])

@@ -1,0 +1,2 @@
+# No third-party packages. This file is the lock.
+# CI and scripts/check.py install from it with: pip install -r requirements.txt

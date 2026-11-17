@@ -1,0 +1,6 @@
+---
+description: 强制项以 AGENTS.md 为准
+alwaysApply: true
+---
+
+做任何工作前先读 AGENTS.md 的强制项。任一 MUST 不满足不得说完成。

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>核对题页</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="mark">曳光弹 · 只在本机</p>
+      <h1>核对题页</h1>
+    </div>
+    <form id="open-form" class="open-form">
+      <label>书目录
+        <input id="book" name="book" type="text" autocomplete="off" placeholder="OCR 输出目录，里面有 page_0001" required>
+      </label>
+      <label>原始 PDF
+        <input id="pdf" name="pdf" type="text" autocomplete="off" placeholder="用来对照的 PDF 文件" required>
+      </label>
+      <button type="submit">打开</button>
+    </form>
+  </header>
+  <p id="status" class="status" role="status">先填写书目录和 PDF，再打开。</p>
+  <main class="workspace">
+    <nav class="pages" aria-label="页列表">
+      <h2>页</h2>
+      <div id="page-list" class="page-list"></div>
+    </nav>
+    <section class="pane" aria-label="原页">
+      <div class="pane-head">
+        <h2>原页</h2>
+        <a id="pdf-link" href="/pdf" target="_blank" rel="noopener">在新标签打开</a>
+      </div>
+      <iframe id="pdf-frame" title="原始 PDF" src="about:blank"></iframe>
+    </section>
+    <section class="pane" aria-label="Markdown">
+      <div class="pane-head">
+        <h2>Markdown</h2>
+        <button id="save" type="button" disabled>另存</button>
+      </div>
+      <p id="rules" class="rules">打开一页后，这里会写明这一页有几块。</p>
+      <textarea id="editor" aria-label="Markdown 编辑" spellcheck="false" disabled></textarea>
+    </section>
+    <section class="pane" aria-label="JSON 预览">
+      <div class="pane-head">
+        <h2>JSON 预览</h2>
+      </div>
+      <pre id="json" class="json" aria-live="polite"></pre>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -25,7 +25,7 @@
 
 - `.reviewed.json` 是 OCR 页块。它不是题目行，也不是答案行。
 - `.questions.json` 是 `k12-question-draft`。`.answers/` 里一份文件是一条 `k12-answer-draft`。
-- 字段以 k12-qbank 的 ADR 0013、ADR 0014 为准。契约是 `k12-question-draft` 第 1 版和 `k12-answer-draft` 第 1 版。形状以 `contracts/` 里复制的 JSON Schema 为准，和题库 `backend/catalog/contracts/` 是同一份。写入前校验。失败的 `code` 是 `CONTRACT`。题库导入失败的 `code` 是 `not_draft` 或 `answer_conflict`。两边都有 `code`、`message`、`request_id`。不写文件。本工具不调用题库。
+- 字段以 k12-qbank 的 ADR 0013、ADR 0014 为准。契约是 `k12-question-draft` 第 1 版和 `k12-answer-draft` 第 1 版。形状以 `contracts/` 里复制的 JSON Schema 为准，和题库 `backend/catalog/contracts/` 是同一份。草稿写出 `schema_version`。未知版本由题库拒绝。写入前校验。失败的 `code` 是 `CONTRACT`。题库导入失败的 `code` 是 `not_draft` 或 `answer_conflict`。两边都有 `code`、`message`、`request_id`。不写文件。本工具不调用题库。
 
 ## 强制项
 

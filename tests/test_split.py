@@ -129,6 +129,8 @@ class SplitTests(unittest.TestCase):
         draft = to_draft_file(split_questions(PAGE, RULES), 1)
         self.assertEqual(draft["contract"], "k12-question-draft")
         self.assertEqual(draft["contract_version"], 1)
+        self.assertEqual(draft["schema_version"], 1)
+        self.assertIs(draft["schema_version"], 1)
         self.assertEqual(draft["source"], {"pdf_page": 1})
         self.assertTrue(draft["questions"])
         for question in draft["questions"]:

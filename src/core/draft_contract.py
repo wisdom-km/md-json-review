@@ -4,6 +4,7 @@ from __future__ import annotations
 
 CONTRACT = "k12-question-draft"
 CONTRACT_VERSION = 1
+SCHEMA_VERSION = 1
 # A new label maps onto a structure. A new structure would need its own child rows.
 STRUCTURE = {
     "single_choice": "choice",
@@ -37,6 +38,7 @@ def to_draft_file(split: dict, pdf_page: int | None) -> dict:
     return {
         "contract": CONTRACT,
         "contract_version": CONTRACT_VERSION,
+        "schema_version": SCHEMA_VERSION,
         "ok": bool(split.get("ok")),
         "reason": split.get("reason") or "",
         "preface": split.get("preface") or "",

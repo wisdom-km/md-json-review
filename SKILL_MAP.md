@@ -18,12 +18,12 @@
 | `architecture-from-idea` | 用过 | 新工具，先定档位和依赖方向 | `DECISIONS.md`、`ARCHITECTURE.md` |
 | `project-essentials` | 用过 | 按曳光弹做了 G0 能在本机做的项 | `AGENTS.md`、`docs/evidence/g0.md` |
 | `agent-constraint-docs` | 下一步 | 曳光弹只用短文档。转长期前再补全套 | `PROGRESS.md` |
-| `vibe-coding-loop` | 下一步 | 下一次改功能时按任务循环走 | `PROGRESS.md` |
+| `vibe-coding-loop` | 用过 | 这一轮补上 OCR 答案文件，使它和 `k12-answer-draft` 同一形状，并用测试验证 | `tests/test_answers.py`、`README.md` |
 | `architecture-guardrails` | 用不上 | 转长期前再做机器门禁 | `PROGRESS.md` |
 | `debug-with-logs` | 用不上 | 还没有未知故障 | 这一期没有事故 |
 | `always-on-agents` | 用不上 | 不是无人值守的 agent | 用户打开网页才工作 |
 | `aesthetic-coach` | 未核实 unverified | 开工时扫到目录名 | 技能库目录 |
-| `answer-me-with-html` | 未核实 unverified | 开工时扫到目录名 | 技能库目录 |
+| `answer-me-with-html` | 用过 | 用一页说明扫描答案怎么对上答案表 | `ocr-answer-draft-20261117-193332.html` |
 | `apple-design-coach` | 未核实 unverified | 开工时扫到目录名 | 技能库目录 |
 | `ask-matt` | 未核实 unverified | 开工时扫到目录名 | 技能库目录 |
 | `claude-handoff` | 未核实 unverified | 开工时扫到目录名 | 技能库目录 |
@@ -73,3 +73,6 @@
 | 2026-11-17 | `architecture-from-idea` | 未核实 → 用过 | 用户选定回写 OCR 块、D:\md-json-review、网页、另存、块数不对就停 |
 | 2026-11-17 | `project-essentials` | 未核实 → 用过 | 按 MANDATORY.md 的曳光弹列做了本机能做的开工项 |
 | 2026-11-17 | `tabbit` | 未核实 → 卡住 | `tabbit-cli diagnose` 返回 CLI_REGISTRATION_UNAVAILABLE，没有点到网页 |
+| 2026-11-17 | `vibe-coding-loop` | 下一步 → 用过 | 选择窗口、Markdown 编辑/分屏/预览、顶栏翻页、自动保存、手动保存、导出。13 个测试通过 |
+| 2026-11-17 | `vibe-coding-loop` | 继续用过 | OCR 参考答案页写成一份一份的 `k12-answer-draft`。27 个测试通过 |
+| 2026-11-17 | `answer-me-with-html` | 未核实 → 用过 | 说明页 `ocr-answer-draft-20261117-193332.html` |

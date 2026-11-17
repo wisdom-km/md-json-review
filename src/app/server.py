@@ -11,14 +11,26 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from app.dialogs import pick_path
 from app.log import JsonLogger
-from app.store import list_pages, open_book, preview_page, read_page, save_page
+from app.store import export_page, list_pages, open_book, preview_page, read_page, save_page
 from core.convert import ConvertError, refuse_drill
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC = Path(__file__).resolve().parent / "static"
 MAX_BODY = 2_500_000
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+
+
+def _page_role(body: dict) -> str:
+    return "answers" if body.get("page_role") == "answers" else "questions"
+
+
+def _answer_confirms(body: dict) -> list[str]:
+    raw = body.get("answer_confirms")
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, str)]
 
 
 class Session:
@@ -156,6 +168,18 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                 payload["ok"] = True
                 payload["request_id"] = request_id
                 return self._send_json(200, payload)
+            if method == "POST" and route == "/api/pick":
+                body = self._read_json()
+                chosen = pick_path(str(body.get("kind", "")))
+                return self._send_json(
+                    200,
+                    {
+                        "ok": True,
+                        "request_id": request_id,
+                        "cancelled": chosen == "",
+                        "path": chosen,
+                    },
+                )
             if method == "POST" and route == "/api/open":
                 body = self._read_json()
                 book, pdf = open_book(str(body.get("book_dir", "")), str(body.get("pdf_path", "")))
@@ -171,12 +195,17 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                         session.require_book(),
                         str(body.get("rel", "")),
                         body.get("markdown", ""),
+                        page_role=_page_role(body),
+                        answer_confirms=_answer_confirms(body),
                     )
                 payload["ok"] = True
                 payload["request_id"] = request_id
                 return self._send_json(200, payload)
             if method == "POST" and route == "/api/save":
                 body = self._read_json()
+                manual = body.get("backup", True)
+                if not isinstance(manual, bool):
+                    manual = True
                 with session.lock:
                     payload = save_page(
                         session.require_book(),
@@ -184,6 +213,10 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                         body.get("markdown", ""),
                         sink=logger,
                         request_id=request_id,
+                        backup=manual,
+                        type_overrides=body.get("type_overrides") or {},
+                        page_role=_page_role(body),
+                        answer_confirms=_answer_confirms(body),
                     )
                 logger.event(
                     "INFO",
@@ -195,7 +228,45 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                 )
                 payload["ok"] = True
                 payload["request_id"] = request_id
-                payload["message"] = "已另存。原始 Markdown 和原始 JSON 没有改。"
+                if payload["page_role"] == "answers":
+                    lead = "已保存参考答案。" if manual else "已自动保存参考答案。"
+                else:
+                    lead = "已保存。" if manual else "已自动保存。"
+                payload["message"] = lead + "原始 Markdown 和原始 JSON 没有改。"
+                return self._send_json(200, payload)
+            if method == "POST" and route == "/api/export":
+                body = self._read_json()
+                with session.lock:
+                    payload = export_page(
+                        session.require_book(),
+                        str(body.get("rel", "")),
+                        body.get("markdown", ""),
+                        str(body.get("export_dir", "")),
+                        sink=logger,
+                        request_id=request_id,
+                        page_role=_page_role(body),
+                        answer_confirms=_answer_confirms(body),
+                        type_overrides=body.get("type_overrides") or {},
+                    )
+                logger.event(
+                    "INFO",
+                    "page_exported",
+                    request_id,
+                    "app.store",
+                    result="ok",
+                    backed_up=payload["backed_up"],
+                )
+                payload["ok"] = True
+                payload["request_id"] = request_id
+                if payload["page_role"] == "answers":
+                    payload["message"] = (
+                        f"已导出 {payload['markdown_name']}、{payload['json_name']}"
+                        f" 和 {payload['answer_count']} 份答案。"
+                    )
+                else:
+                    payload["message"] = (
+                        f"已导出 {payload['markdown_name']}、{payload['json_name']} 和题目草稿。"
+                    )
                 return self._send_json(200, payload)
             return self._send_json(
                 404,

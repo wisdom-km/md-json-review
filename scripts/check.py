@@ -20,6 +20,7 @@ def main() -> None:
     python = sys.executable
     run([python, "-m", "unittest", "discover", "-s", "tests", "-v"])
     run([python, str(ROOT / "scripts" / "scan_secrets.py")])
+    run([python, str(ROOT / "scripts" / "check_contracts_in_sync.py")])
     run([python, "-m", "pip", "install", "-r", str(ROOT / "requirements.txt")])
 
 

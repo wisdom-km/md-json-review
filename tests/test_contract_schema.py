@@ -12,6 +12,7 @@ from core.convert import ConvertError
 from core.draft_contract import to_draft_file
 from core.schema_check import schema_problems, unknown_schema_keywords
 from core.split import split_questions
+from rules_loader import shipped_rules
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = """一. 选择题
@@ -28,7 +29,7 @@ class ContractSchemaTest(unittest.TestCase):
 
     def test_generated_question_file_matches_and_an_extra_field_is_refused(self) -> None:
         schema = json.loads((ROOT / "contracts" / "k12-question-draft.v1.schema.json").read_text(encoding="utf-8"))
-        draft = to_draft_file(split_questions(PAGE), 1)
+        draft = to_draft_file(split_questions(PAGE, shipped_rules()), 1)
         self.assertEqual(schema_problems(schema, draft), [])
         draft["note"] = "no"
         with self.assertRaises(ConvertError) as caught:

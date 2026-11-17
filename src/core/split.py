@@ -1,7 +1,8 @@
 """Split one reviewed page into question drafts. No files and no guessing.
 
-A choice section with no A–D options refuses the whole page. Two conflicting
-signals become an unresolved draft instead of a guessed type.
+Rules come from the caller. Fewer options than needs_confirm_threshold marks
+the question needs_confirm, unless the rules refuse the whole page. Two
+conflicting signals become an unresolved draft instead of a guessed type.
 """
 
 from __future__ import annotations
@@ -9,29 +10,16 @@ from __future__ import annotations
 import re
 
 from core.convert import normalize_newlines
+from core.split_rules import SplitRules, marker_spans
 
-_SECTION = re.compile(
-    r"^[一二三四五六七八九十]+[.．、]\s*(单选题|多选题|选择题|填空题|解答题)\s*$"
-)
 _QUESTION = re.compile(r"^(\d+)[.．、]\s*(.*)$")
-_SUB = re.compile(r"[（(](\d+)[）)]")
 _DIVIDER = re.compile(r"^[\u4e00-\u9fff]{2,12}$")
-_OPTION = re.compile(r"([A-D])[.．、]\s*")
 _BLANK = re.compile(r"_{2,}")
 _MULTI = re.compile(r"多选|哪些")
-
-_SECTION_TYPE = {
-    "单选题": "single_choice",
-    "多选题": "multiple_choice",
-    "选择题": "choice",
-    "填空题": "fill_blank",
-    "解答题": "solution",
-}
-_CHOICE_SECTIONS = {"choice", "single_choice", "multiple_choice"}
 _CONFIRMABLE = {"single_choice", "multiple_choice", "fill_blank", "solution"}
 
 
-def split_questions(markdown: str) -> dict:
+def split_questions(markdown: str, rules: SplitRules) -> dict:
     """Return preface text and question drafts for one page."""
     text = normalize_newlines(markdown).strip("\n")
     lines = text.split("\n") if text else []
@@ -53,13 +41,13 @@ def split_questions(markdown: str) -> dict:
 
     for index, line in enumerate(lines):
         stripped = line.strip()
-        section = _SECTION.match(stripped)
-        if section:
+        matched = rules.match_type(stripped)
+        if matched is not None:
             flush()
             mode = True
             section_index += 1
             section_title = stripped
-            section_type = _SECTION_TYPE[section.group(1)]
+            section_type = matched
             continue
         if not mode:
             preface.append(line)
@@ -86,17 +74,19 @@ def split_questions(markdown: str) -> dict:
         current["lines"].append(line)
     flush()
 
-    held = False
+    refused = False
     for item in raw:
-        draft, missing_options = _build(item)
-        if missing_options:
-            held = True
+        draft, missing_options = _build(item, rules)
+        if missing_options and rules.reject_on_missing_options:
+            refused = True
             break
+        if missing_options and draft["status"] == "candidate":
+            draft["status"] = "needs_confirm"
         drafts.append(draft)
-    if held:
+    if refused:
         return {
             "ok": False,
-            "reason": "有选择题没有 A 到 D，这一页没有拆成草稿。",
+            "reason": "有选择题没有足够的选项，这一页没有拆成草稿。",
             "preface": "\n".join(preface).strip(),
             "questions": [],
         }
@@ -140,16 +130,16 @@ def _is_divider(lines: list[str], index: int) -> bool:
     return False
 
 
-def _build(item: dict) -> tuple[dict, bool]:
+def _build(item: dict, rules: SplitRules) -> tuple[dict, bool]:
     body = "\n".join(item["lines"]).strip()
     section_type = item["section_type"]
     if section_type == "solution" or section_type is None:
-        stem_source, subquestions = _peel_subs(body)
+        stem_source, subquestions = _peel_subs(body, rules)
     else:
         stem_source, subquestions = body, []
-    stem_text, options = _peel_options(stem_source)
-    kind, status = _resolve(section_type, stem_text, options, subquestions)
-    missing = section_type in _CHOICE_SECTIONS and len(options) < 2
+    stem_text, options = _peel_options(stem_source, rules)
+    kind, status = _resolve(section_type, stem_text, options, subquestions, rules)
+    missing = section_type in rules.option_required_types and len(options) < rules.needs_confirm_threshold
     draft = {
         "key": f"{item['section_index']}:{item['number']}",
         "section": item["section"],
@@ -163,8 +153,14 @@ def _build(item: dict) -> tuple[dict, bool]:
     return draft, missing
 
 
-def _resolve(section_type: str | None, stem: str, options: list, subs: list) -> tuple[str, str]:
-    has_options = len(options) >= 2
+def _resolve(
+    section_type: str | None,
+    stem: str,
+    options: list,
+    subs: list,
+    rules: SplitRules,
+) -> tuple[str, str]:
+    has_options = len(options) >= rules.needs_confirm_threshold
     has_blank = _BLANK.search(stem) is not None
     wants_multi = _MULTI.search(stem) is not None
     if section_type == "single_choice":
@@ -198,8 +194,8 @@ def _resolve(section_type: str | None, stem: str, options: list, subs: list) -> 
     return "unresolved", "needs_confirm"
 
 
-def _peel_subs(body: str) -> tuple[str, list[dict]]:
-    marks = list(_SUB.finditer(body))
+def _peel_subs(body: str, rules: SplitRules) -> tuple[str, list[dict]]:
+    marks = marker_spans(body, rules.subquestion_markers)
     if not marks:
         return body.strip(), []
     if len(marks) == 1:
@@ -214,9 +210,9 @@ def _peel_subs(body: str) -> tuple[str, list[dict]]:
     return stem, subs
 
 
-def _peel_options(text: str) -> tuple[str, list[dict]]:
-    marks = list(_OPTION.finditer(text))
-    if len(marks) < 2:
+def _peel_options(text: str, rules: SplitRules) -> tuple[str, list[dict]]:
+    marks = list(rules.option_pattern.finditer(text))
+    if len(marks) < rules.needs_confirm_threshold:
         return text.strip(), []
     stem = text[: marks[0].start()].strip()
     options = []

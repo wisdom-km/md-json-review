@@ -1,6 +1,6 @@
 # AGENTS.md
 
-档位：曳光弹。[D] 是：另存稿写在用户的书目录里。[P] 否：只监听 127.0.0.1。
+档位：单机工具。见 [docs/adr/0001-utility-tier.md](docs/adr/0001-utility-tier.md)。[D] 是：另存稿写在用户的书目录里。[P] 否：只监听 127.0.0.1。
 
 ## 怎么跑、怎么测
 
@@ -25,9 +25,9 @@
 
 - `.reviewed.json` 是 OCR 页块。它不是题目行，也不是答案行。
 - `.questions.json` 是 `k12-question-draft`。`.answers/` 里一份文件是一条 `k12-answer-draft`。
-- 字段以 k12-qbank 的 ADR 0013、ADR 0014 为准。契约是 `k12-question-draft` 第 1 版和 `k12-answer-draft` 第 1 版。形状以 `contracts/` 里复制的 JSON Schema 为准，和题库 `backend/catalog/contracts/` 是同一份。`scripts/check_contracts_in_sync.py` 对题库 main 做 sha256，不一致则退出码不是 0。写入前校验。失败的 `code` 是 `CONTRACT`。题库导入失败的 `code` 是 `not_draft` 或 `answer_conflict`。两边都有 `code`、`message`、`request_id`。不写文件。本工具不调用题库。
+- 字段以 k12-qbank 的 ADR 0013、ADR 0014 为准。契约是 `k12-question-draft` 第 1 版和 `k12-answer-draft` 第 1 版。形状以 `contracts/` 里复制的 JSON Schema 为准，和题库 `backend/catalog/contracts/` 是同一份。草稿写出 `schema_version`。未知版本由题库拒绝。`scripts/check_contracts_in_sync.py` 对题库 main 做 sha256，不一致则退出码不是 0。写入前校验。失败的 `code` 是 `CONTRACT`。题库导入失败的 `code` 是 `not_draft` 或 `answer_conflict`。两边都有 `code`、`message`、`request_id`。不写文件。本工具不调用题库。
 
 ## 强制项
 
-曳光弹 MUST：M-01 到 M-09，外加 M-12。[D] 时 M-11。M-10 不适用。
+单机工具的门禁编号暂时仍按曳光弹：M-01 到 M-09，外加 M-12。[D] 时 M-11。M-10 不适用。project-essentials 没有这一档的单独表格。要改成长期前先问人。
 任一 MUST 不满足不得说完成。豁免只认用户原话，记在 `docs/WAIVERS.md`。现在没有豁免。

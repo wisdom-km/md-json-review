@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 
-_IGNORED = {"$schema", "$id", "$defs", "title", "description"}
+_IGNORED = {"$schema", "$id", "$defs", "title", "description", "version"}
 _IMPLEMENTED = _IGNORED | {
     "$ref",
     "type",

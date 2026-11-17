@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 import time
 import uuid
@@ -106,15 +107,7 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                     result="error",
                     error=exc.code,
                 )
-                status = self._send_json(
-                    400,
-                    {
-                        "ok": False,
-                        "error_code": exc.code,
-                        "message": exc.message,
-                        "request_id": request_id,
-                    },
-                )
+                status = self._send_json(400, _error_body(exc.code, exc.message, request_id))
             except Exception as exc:
                 logger.event(
                     "ERROR",
@@ -126,12 +119,11 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                 )
                 status = self._send_json(
                     500,
-                    {
-                        "ok": False,
-                        "error_code": "INTERNAL",
-                        "message": "程序内部出错。请拿请求编号到日志里查看，没有写入文件。",
-                        "request_id": request_id,
-                    },
+                    _error_body(
+                        "INTERNAL",
+                        "程序内部出错。请拿请求编号到日志里查看，没有写入文件。",
+                        request_id,
+                    ),
                 )
             duration_ms = int((time.perf_counter() - started) * 1000)
             logger.event(
@@ -268,15 +260,7 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                         f"已导出 {payload['markdown_name']}、{payload['json_name']} 和题目草稿。"
                     )
                 return self._send_json(200, payload)
-            return self._send_json(
-                404,
-                {
-                    "ok": False,
-                    "error_code": "NOT_FOUND",
-                    "message": "没有这个地址。",
-                    "request_id": request_id,
-                },
-            )
+            return self._send_json(404, _error_body("NOT_FOUND", "没有这个地址。", request_id))
 
         def _send_pdf(self) -> int:
             with session.lock:
@@ -327,10 +311,46 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
     return server
 
 
+def _error_body(code: str, message: str, request_id: str) -> dict:
+    """Same three fields as k12-qbank. error_code stays for the current page."""
+    return {
+        "ok": False,
+        "code": code,
+        "error_code": code,
+        "message": message,
+        "request_id": request_id,
+    }
+
+
+def resolve_port(argv: list[str] | None = None, environ: dict[str, str] | None = None) -> int:
+    """--port wins over PORT. The default is 8765."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    env = os.environ if environ is None else environ
+    raw = env.get("PORT", "8765")
+    label = "PORT"
+    index = 0
+    while index < len(args):
+        item = args[index]
+        if item == "--port":
+            if index + 1 >= len(args):
+                raise SystemExit("端口必须是 1 到 65535 的整数。--port 后面没有数字。")
+            raw = args[index + 1]
+            label = "--port"
+            index += 2
+            continue
+        if item.startswith("--port="):
+            raw = item.split("=", 1)[1]
+            label = "--port"
+        index += 1
+    if not str(raw).isdigit() or not 1 <= int(raw) <= 65535:
+        raise SystemExit(f"端口必须是 1 到 65535 的整数。现在是 {label}={raw}。")
+    return int(raw)
+
+
 def main() -> None:
     load_env(ROOT / ".env")
     host = require_loopback(os.environ.get("HOST", "127.0.0.1"))
-    port = int(os.environ.get("PORT", "8765"))
+    port = resolve_port()
     level = os.environ.get("MD_JSON_LOG_LEVEL", "INFO")
     logger = JsonLogger(ROOT / "logs" / "app.jsonl", level)
     session = Session()

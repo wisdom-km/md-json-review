@@ -44,6 +44,22 @@ class ConvertTests(unittest.TestCase):
     def test_assign_parts_for_one_block_does_not_split(self):
         self.assertEqual(assign_parts("甲\n---\n乙", 1), ["甲\n---\n乙"])
 
+    def test_formula_split_by_separator_stays_whole_on_one_block(self):
+        formula = "计算 $$\n---\n\\frac{1}{2}\n$$"
+        self.assertEqual(assign_parts(formula, 1), [formula])
+        updated = apply_markdown(ONE, formula)
+        self.assertEqual(updated[0][0]["content"], formula)
+        self.assertEqual(ONE[0][0]["content"], "旧")
+
+    def test_formula_split_by_separator_stops_when_block_count_differs(self):
+        formula = "计算 $$\n---\n\\frac{1}{2}\n$$"
+        before = [group[0]["content"] for group in THREE]
+        with self.assertRaises(ConvertError) as caught:
+            apply_markdown(THREE, formula)
+        self.assertEqual(caught.exception.code, "BLOCK_MISMATCH")
+        self.assertIn("没有写入", caught.exception.message)
+        self.assertEqual([group[0]["content"] for group in THREE], before)
+
     def test_bad_json_missing_key(self):
         with self.assertRaises(ConvertError) as caught:
             apply_markdown([[{"index": 0, "label": "text"}]], "甲")

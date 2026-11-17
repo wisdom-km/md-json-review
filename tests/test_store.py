@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from app.store import list_pages, read_page, save_page
+from app.store import export_page, list_pages, read_page, save_page
 from core.convert import ConvertError
 
 
@@ -37,6 +37,14 @@ class StoreTests(unittest.TestCase):
             self.assertEqual((book / rel).with_suffix(".json").read_bytes(), original_json)
             reviewed = (book / first["reviewed_md"]).read_text(encoding="utf-8")
             self.assertEqual(reviewed, "新的正文\n")
+            questions = json.loads(
+                (book / "page_0001" / "input_1_page_0001" / "input_1_page_0001.questions.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(questions["contract"], "k12-question-draft")
+            self.assertEqual(questions["contract_version"], 1)
+            self.assertEqual(questions["source"], {"pdf_page": 1})
+            self.assertTrue(questions["ok"])
+            self.assertEqual(questions["questions"], [])
             saved_json = json.loads((book / first["reviewed_json"]).read_text(encoding="utf-8"))
             self.assertEqual(saved_json[0][0]["content"], "新的正文\n")
             second = save_page(book, rel, "第二次\n")
@@ -91,6 +99,41 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(len(pages), 1)
             self.assertTrue(pages[0]["has_reviewed"])
             self.assertEqual(pages[0]["page_no"], 1)
+
+    def test_automatic_save_does_not_backup_each_pause(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temporary:
+            book = Path(temporary)
+            write_book(book)
+            rel = "page_0001/input_1_page_0001/input_1_page_0001.md"
+            save_page(book, rel, "第一次\n", backup=False)
+            save_page(book, rel, "第二次\n", backup=False)
+            self.assertFalse((book / "_review_backups").exists())
+            reviewed = book / "page_0001" / "input_1_page_0001" / "input_1_page_0001.reviewed.md"
+            self.assertEqual(reviewed.read_text(encoding="utf-8"), "第二次\n")
+
+    def test_export_writes_a_copy_and_refuses_the_original_path(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temporary:
+            book = Path(temporary) / "book"
+            book.mkdir()
+            write_book(book)
+            rel = "page_0001/input_1_page_0001/input_1_page_0001.md"
+            original = (book / rel).read_bytes()
+            dest = Path(temporary) / "out"
+            dest.mkdir()
+            exported = export_page(book, rel, "导出的正文\n", str(dest))
+            self.assertEqual(exported["markdown_name"], "input_1_page_0001.md")
+            self.assertEqual((dest / "input_1_page_0001.md").read_text(encoding="utf-8"), "导出的正文\n")
+            saved = json.loads((dest / "input_1_page_0001.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved[0][0]["content"], "导出的正文\n")
+            self.assertEqual((book / rel).read_bytes(), original)
+            page_dir = str((book / rel).parent)
+            with self.assertRaises(ConvertError) as caught:
+                export_page(book, rel, "再导出\n", page_dir)
+            self.assertEqual(caught.exception.code, "EXPORT_ORIGINAL")
 
 
 if __name__ == "__main__":

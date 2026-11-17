@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 
 from core.convert import normalize_newlines
-from core.split import _parts
+from core.split import _SECTION_SHAPE, _parts
 from core.split_rules import SplitRules, marker_spans
 
 _QUESTION = re.compile(r"^(\d+)[.．、]\s*(.*)$")
@@ -45,6 +45,12 @@ def split_answers(markdown: str, rules: SplitRules) -> dict:
             mode = True
             section_index += 1
             section_label = matched
+            continue
+        if _SECTION_SHAPE.match(stripped):
+            flush()
+            mode = True
+            section_index += 1
+            section_label = ""
             continue
         if not mode:
             preface.append(line)

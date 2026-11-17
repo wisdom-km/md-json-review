@@ -1,10 +1,10 @@
 {
   "type_patterns": [
-    {"pattern": "^[一二三四五六七八九十]+[.．、]\\s*(单选题)\\s*$", "type": "single_choice"},
-    {"pattern": "^[一二三四五六七八九十]+[.．、]\\s*(多选题)\\s*$", "type": "multiple_choice"},
-    {"pattern": "^[一二三四五六七八九十]+[.．、]\\s*(选择题)\\s*$", "type": "choice"},
-    {"pattern": "^[一二三四五六七八九十]+[.．、]\\s*(填空题)\\s*$", "type": "fill_blank"},
-    {"pattern": "^[一二三四五六七八九十]+[.．、]\\s*(解答题)\\s*$", "type": "solution"}
+    {"pattern": "^[一二三四五六七八九十]+[.．、]\\s*单\\s*选\\s*题\\s*$", "type": "single_choice"},
+    {"pattern": "^[一二三四五六七八九十]+[.．、]\\s*多\\s*选\\s*题\\s*$", "type": "multiple_choice"},
+    {"pattern": "^[一二三四五六七八九十]+[.．、]\\s*选\\s*择\\s*题\\s*$", "type": "choice"},
+    {"pattern": "^[一二三四五六七八九十]+[.．、]\\s*填\\s*空\\s*题\\s*$", "type": "fill_blank"},
+    {"pattern": "^[一二三四五六七八九十]+[.．、]\\s*解\\s*答\\s*题\\s*$", "type": "solution"}
   ],
   "option_pattern": "([A-D])[.．、]\\s*",
   "option_keys": ["A", "B", "C", "D"],

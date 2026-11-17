@@ -14,6 +14,7 @@ from core.split_rules import SplitRules, marker_spans
 
 _QUESTION = re.compile(r"^(\d+)[.．、]\s*(.*)$")
 _DIVIDER = re.compile(r"^[\u4e00-\u9fff]{2,12}$")
+_SECTION_SHAPE = re.compile(r"^[一二三四五六七八九十]+[.．、]\s*\S.{0,24}$")
 _BLANK = re.compile(r"_{2,}")
 _MULTI = re.compile(r"多选|哪些")
 _CONFIRMABLE = {"single_choice", "multiple_choice", "fill_blank", "solution"}
@@ -48,6 +49,13 @@ def split_questions(markdown: str, rules: SplitRules) -> dict:
             section_index += 1
             section_title = stripped
             section_type = matched
+            continue
+        if _SECTION_SHAPE.match(stripped):
+            flush()
+            mode = True
+            section_index += 1
+            section_title = stripped
+            section_type = None
             continue
         if not mode:
             preface.append(line)

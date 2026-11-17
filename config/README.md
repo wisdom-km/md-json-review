@@ -4,7 +4,7 @@
 
 | 字段 | 含义 |
 | --- | --- |
-| `type_patterns` | 题型标题。每条有 `pattern` 和 `type`。先匹配到的生效。`type` 只能是 `single_choice`、`multiple_choice`、`choice`、`fill_blank`、`solution`。`choice` 表示标题只写了「选择题」，单选还是多选留到后面判断。 |
+| `type_patterns` | 题型标题。每条有 `pattern` 和 `type`。先匹配到的生效。`type` 只能是 `single_choice`、`multiple_choice`、`choice`、`fill_blank`、`solution`。`choice` 表示标题只写了「选择题」，单选还是多选留到后面判断。现有式子允许字和字之间有空格，用来接 OCR 把「单选题」拆开的情况。 |
 | `option_pattern` | 选项标记。必须有一个捕获组，组里是选项字母。 |
 | `option_keys` | 允许的选项字母。参考答案页只认这些字母。 |
 | `option_required_types` | 这些题型必须有足够的选项。 |

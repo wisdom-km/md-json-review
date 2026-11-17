@@ -35,6 +35,17 @@ Markdown 整页是预览。点哪一行，就只把那一行变成源码，其�
 
 字段以 k12-qbank 的 ADR 0013 和 ADR 0014 为准。形状文件在 `contracts/`，从题库的 `backend/catalog/contracts/` 复制，见 ADR 0017 和 ADR 0018。契约文件有 `$id` 和 `version`。写出的草稿带整数 `schema_version`。`scripts/check_contracts_in_sync.py` 读取题库 main 上的两份文件并比较 sha256，不一致时退出码不是 0。CI 会跑这条检查。写入前必须通过这份校验。失败的 `code` 是 `CONTRACT`，`error_code` 与它相同，这一次不写文件。题库导入失败的 `code` 是 `not_draft` 或 `answer_conflict`。两边都有 `code`、`message`、`request_id`。题库用 `import_question_draft` 和 `import_answer_draft` 各解析一次，放进内存，不再转成另一套 JSON。没有 HTTP 导入。这个工具不调用题库，这一步也不写入题库数据库。页的种类记在 `{文件名}.page-role.txt`。换成另一种再保存时，另一种的旧文件先留着。题目导入只读 `.questions.json`。答案导入只读 `.answers/` 里的文件。
 
+## 兼容矩阵
+
+这一版 main 和 [k12-qbank](https://github.com/wisdom-km/k12-qbank) 的 main 使用下面两份契约。带注释的标记 `draft-contract-1` 打在包含这张表的 main 上。更早的提交没有这张表，也不代表这一版契约。
+
+| 契约 | 文件 version | 草稿 schema_version | $id |
+| --- | --- | --- | --- |
+| k12-question-draft | 1 | 1 | https://github.com/wisdom-km/k12-qbank/contracts/k12-question-draft.v1.schema.json |
+| k12-answer-draft | 1 | 1 | https://github.com/wisdom-km/k12-qbank/contracts/k12-answer-draft.v1.schema.json |
+
+本工具是生产者，复制题库的两份 JSON Schema，并写出整数 `schema_version`。题库是消费者，按 `$id` 和 `schema_version` 分发。题库的 job `review-import` 安装本仓库 main，用合成页导入这两份草稿。夹具不是教材页。
+
 ## 保存和导出
 
 - 改字后约一秒自动保存到书目录里的 `.reviewed.md` 和 `.reviewed.json`。原始文件不改。

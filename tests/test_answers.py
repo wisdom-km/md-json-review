@@ -113,7 +113,7 @@ class AnswerStoreTests(unittest.TestCase):
                 book,
                 rel,
                 markdown,
-                backup=False,
+                backup=True,
                 page_role="answers",
                 answer_confirms=["1:1:ocr:1"],
             )
@@ -143,8 +143,8 @@ class AnswerStoreTests(unittest.TestCase):
             book = Path(temporary)
             write_book(book)
             rel = "page_0001/input_1_page_0001/input_1_page_0001.md"
-            save_page(book, rel, "一. 选择题\n1. A\n", backup=False, page_role="answers")
-            save_page(book, rel, "一. 选择题\n1. 题干\nA. 甲\nB. 乙\n", backup=False, page_role="questions")
+            save_page(book, rel, "一. 选择题\n1. A\n", backup=True, page_role="answers")
+            save_page(book, rel, "一. 选择题\n1. 题干\nA. 甲\nB. 乙\n", backup=True, page_role="questions")
             folder = book / "page_0001" / "input_1_page_0001"
             self.assertTrue((folder / "input_1_page_0001.questions.json").is_file())
             self.assertTrue((folder / "input_1_page_0001.answers" / "1-1-ocr-1.json").is_file())
@@ -159,7 +159,7 @@ class AnswerStoreTests(unittest.TestCase):
             book = Path(temporary)
             write_book(book)
             rel = "page_0001/input_1_page_0001/input_1_page_0001.md"
-            save_page(book, rel, "一. 选择题\n1. A\n2. C\n", backup=False, page_role="answers")
+            save_page(book, rel, "一. 选择题\n1. A\n2. C\n", backup=True, page_role="answers")
             save_page(book, rel, "一. 选择题\n1. B\n", backup=True, page_role="answers")
             folder = book / "page_0001" / "input_1_page_0001" / "input_1_page_0001.answers"
             names = sorted(path.name for path in folder.glob("*.json"))

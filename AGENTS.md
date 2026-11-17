@@ -4,7 +4,7 @@
 
 ## 怎么跑、怎么测
 
-- 跑：`py -3 serve.py`，然后打开终端打印的本机地址。
+- 跑：`py -3 serve.py`，然后打开终端打印的本机地址。k12-qbank 的合成站点也占用 8765，不要同时开。
 - 测：`py -3 scripts/check.py`
 
 ## 日志
@@ -20,6 +20,12 @@
 - 不连接 k12-qbank，也不连接 PostgreSQL
 - 参考答案只写 `origin` 为 `ocr` 的 `k12-answer-draft`。一份文件一条答案。不写模型答案
 - 密钥不进仓库和日志
+
+## 哪份文件能导入
+
+- `.reviewed.json` 是 OCR 页块。它不是题目行，也不是答案行。
+- `.questions.json` 是 `k12-question-draft`。`.answers/` 里一份文件是一条 `k12-answer-draft`。
+- 字段以 k12-qbank 的 ADR 0013、ADR 0014 为准。本工具不调用题库。
 
 ## 强制项
 

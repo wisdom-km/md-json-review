@@ -4,4 +4,4 @@
 
 下一步：下一次公开用分支和 PR。连上 PostgreSQL 时由题库按 ADR 0014 建答案表，不在这个工具里建，也不在这里连接数据库。
 
-卡住：无。公共仓库和 CI 已跑通。https://github.com/wisdom-km/md-json-review/actions/runs/44018319621
+卡住：无。公共仓库和 CI 已跑通。当前 main 是 `5d41fcd`。https://github.com/wisdom-km/md-json-review/actions/runs/44077771910

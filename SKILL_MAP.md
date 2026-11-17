@@ -74,5 +74,6 @@
 | 2026-11-17 | `project-essentials` | 未核实 → 用过 | 按 MANDATORY.md 的曳光弹列做了本机能做的开工项 |
 | 2026-11-17 | `tabbit` | 未核实 → 卡住 | `tabbit-cli diagnose` 返回 CLI_REGISTRATION_UNAVAILABLE，没有点到网页 |
 | 2026-11-17 | `vibe-coding-loop` | 下一步 → 用过 | 选择窗口、Markdown 编辑/分屏/预览、顶栏翻页、自动保存、手动保存、导出。13 个测试通过 |
+| 2026-11-17 | `vibe-coding-loop` | 补记 | 同一天去掉编辑、分屏、预览三个按钮，改成点一行编辑。上面一行里的「分屏」不再是当前界面 |
 | 2026-11-17 | `vibe-coding-loop` | 继续用过 | OCR 参考答案页写成一份一份的 `k12-answer-draft`。27 个测试通过 |
 | 2026-11-17 | `answer-me-with-html` | 未核实 → 用过 | 说明页 `ocr-answer-draft-20261117-193332.html` |

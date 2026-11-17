@@ -1,6 +1,17 @@
-曳光弹。核对 OCR 题页用，留下当骨架，不是可以上线的产品。
+曳光弹。核对 OCR 题页用，留下当骨架，不是可以上线的产品。MIT 许可，见 [LICENSE](LICENSE)。仓库：https://github.com/wisdom-km/md-json-review
 
 你在本机网页里打开一本书的 OCR 目录和原始 PDF，一页一页改 Markdown。保存时另存 `.reviewed.md` 和 `.reviewed.json`。原始 `.md` 和 `.json` 不改。
+
+## 这份 JSON
+
+OCR 给每一页一个 JSON。它是一组「块」，不是一道一道拆开的题。每一块有四个字段：
+
+- `index`：块的序号
+- `label`：块的类型，例如 `text`
+- `content`：这一块的文字。Markdown 改的就是这里
+- `bbox_2d`：这一块在页面上的位置。没有位置时是 `null`
+
+你只改 Markdown。程序把改过的文字放进对应块的 `content`，另外三个字段保持 OCR 原来的值，写成 `.reviewed.json`。这一份就是准备放进数据库的页 JSON。这一版先写成文件，还没有连接 PostgreSQL。
 
 ## 启动
 
@@ -32,4 +43,6 @@ py -3 scripts/check.py
 
 ## 数据
 
-这个程序会把你改过的稿写进书目录。原始 OCR 文件只读。备份在书目录的 `_review_backups`。没有数据库。不要把整个磁盘选成书目录。
+这个程序会把你改过的稿写进书目录。原始 OCR 文件只读。备份在书目录的 `_review_backups`。不要把整个磁盘选成书目录。
+
+题库 PostgreSQL 里现有的题目记录是题干、答案这些字段。这一页的块 JSON 还没有写入那张表。

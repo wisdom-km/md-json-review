@@ -36,8 +36,9 @@ def save_page(
 ) -> dict:
     """Write reviewed copies beside the book. Does not touch originals.
 
-    Automatic saves pass backup=False so a pause in typing does not create a
-    new backup folder. A manual save keeps the previous reviewed copy.
+    Automatic saves pass backup=False. They write only the .reviewed files and
+    do not replace .questions.json or .answers. A manual save keeps the previous
+    reviewed copy and then overwrites the draft files.
     """
     md_path = _page_md(book, rel)
     json_path = md_path.with_suffix(".json")
@@ -52,26 +53,32 @@ def save_page(
     role_path = _role_path(md_path)
     questions_path = md_path.with_name(md_path.stem + ".questions.json")
     answer_dir = _answer_dir(md_path)
-    answer_files, draft = checked_drafts(text, page_number(rel), role, answer_confirms, type_overrides)
+    if backup:
+        answer_files, draft = checked_drafts(text, page_number(rel), role, answer_confirms, type_overrides)
+    else:
+        answer_files, draft = [], None
     _inside(book, reviewed_md)
     _inside(book, reviewed_json)
-    _inside(book, role_path)
-    targets = [reviewed_md, reviewed_json, role_path]
-    if role == "answers":
-        _inside(book, answer_dir)
-        targets.extend(path for path in answer_dir.glob("*.json"))
-    else:
-        _inside(book, questions_path)
-        targets.append(questions_path)
+    targets = [reviewed_md, reviewed_json]
+    if backup:
+        _inside(book, role_path)
+        targets.append(role_path)
+        if role == "answers":
+            _inside(book, answer_dir)
+            targets.extend(path for path in answer_dir.glob("*.json"))
+        else:
+            _inside(book, questions_path)
+            targets.append(questions_path)
     backed_up = _backup_existing(book, targets) if backup else False
     _atomic_text(reviewed_md, text)
     _atomic_text(reviewed_json, dump_json(updated))
-    _atomic_text(role_path, role + "\n")
-    if role == "answers":
-        _write_answer_files(book, answer_dir, answer_files)
-    else:
-        assert draft is not None
-        _atomic_text(questions_path, json.dumps(draft, ensure_ascii=False, indent=2) + "\n")
+    if backup:
+        _atomic_text(role_path, role + "\n")
+        if role == "answers":
+            _write_answer_files(book, answer_dir, answer_files)
+        else:
+            assert draft is not None
+            _atomic_text(questions_path, json.dumps(draft, ensure_ascii=False, indent=2) + "\n")
     if md_path.read_bytes() != original_md or json_path.read_bytes() != original_json:
         raise ConvertError("WRITE_FAILED", "原始文件被改动了，请停止使用并检查这一页。")
     return {

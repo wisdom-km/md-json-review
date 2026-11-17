@@ -39,7 +39,7 @@ JSON 预览可以放在浏览器里再写一遍规则，也可以只放在 core�
 
 [D] 是，因为另存稿在用户的书目录里。[P] 否。
 
-原始 OCR 文件只读。另存稿可以再次保存。手动保存前，把上一份另存稿整份拷到 `_review_backups/<时间>/`。停下来自动保存时不备份，避免每停一次就多一个备份目录。导出写到用户另选的文件夹，文件名是这一页的原名；若目标会盖住原始文件就拒绝。题目页的导出同时带上 `.questions.json`。参考答案页的导出同时带上 `.answers/` 里的答案文件。导出前，目标文件夹里的同名旧文件拷到该文件夹的 `_export_backups/<时间>/`。程序没有删除接口。恢复方法：把备份文件拷回同名的 `.reviewed.md` 或 `.reviewed.json`。答案文件拷回 `{文件名}.answers/`。演练在 `tests/test_store.py` 和 `tests/test_answers.py`：第二次手动保存的备份等于上一份另存稿；连续自动保存不产生备份；导出到原页目录会被拒绝。原始文件字节不变。
+原始 OCR 文件只读。另存稿可以再次保存。手动保存前，把上一份另存稿整份拷到 `_review_backups/<时间>/`。停下来自动保存时只写 `.reviewed.md` 和 `.reviewed.json`，不备份，也不覆盖 `.questions.json` 和 `.answers/`。手动保存和导出才覆盖这两份草稿。导出写到用户另选的文件夹，文件名是这一页的原名；若目标会盖住原始文件就拒绝。题目页的导出同时带上 `.questions.json`。参考答案页的导出同时带上 `.answers/` 里的答案文件。导出前，目标文件夹里的同名旧文件拷到该文件夹的 `_export_backups/<时间>/`。程序没有删除接口。恢复方法：把备份文件拷回同名的 `.reviewed.md` 或 `.reviewed.json`。答案文件拷回 `{文件名}.answers/`。演练在 `tests/test_store.py` 和 `tests/test_answers.py`：第二次手动保存的备份等于上一份另存稿；连续自动保存不产生备份；导出到原页目录会被拒绝。原始文件字节不变。
 
 题目草稿是同目录的 `{文件名}.questions.json`，契约 `k12-question-draft` 第 1 版。写入前用 `contracts/` 里的 JSON Schema 校验，失败不写文件。core 只检查内存里的字典。OCR 答案是 `{文件名}.answers/` 里的一份一份 `k12-answer-draft` 第 1 版。页的种类写在 `{文件名}.page-role.txt`，内容只有 `questions` 或 `answers`。答案键的形状是 `题键:ocr:序号`。文件名把冒号换成连字符。来源只有 `ocr`。勾选采用后，`applicable` 为 true，且 `status` 为 `confirmed`。这仍不是题库发布。本工具不调用 k12-qbank，也不连接 PostgreSQL。
 

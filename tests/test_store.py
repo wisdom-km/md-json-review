@@ -113,6 +113,7 @@ class StoreTests(unittest.TestCase):
             self.assertFalse((book / "_review_backups").exists())
             reviewed = book / "page_0001" / "input_1_page_0001" / "input_1_page_0001.reviewed.md"
             self.assertEqual(reviewed.read_text(encoding="utf-8"), "第二次\n")
+            self.assertFalse((reviewed.with_name("input_1_page_0001.questions.json")).exists())
 
     def test_export_writes_a_copy_and_refuses_the_original_path(self):
         import tempfile
@@ -130,11 +131,34 @@ class StoreTests(unittest.TestCase):
             self.assertEqual((dest / "input_1_page_0001.md").read_text(encoding="utf-8"), "导出的正文\n")
             saved = json.loads((dest / "input_1_page_0001.json").read_text(encoding="utf-8"))
             self.assertEqual(saved[0][0]["content"], "导出的正文\n")
+            exported_draft = json.loads((dest / "input_1_page_0001.questions.json").read_text(encoding="utf-8"))
+            self.assertEqual(exported_draft["contract"], "k12-question-draft")
             self.assertEqual((book / rel).read_bytes(), original)
             page_dir = str((book / rel).parent)
             with self.assertRaises(ConvertError) as caught:
                 export_page(book, rel, "再导出\n", page_dir)
             self.assertEqual(caught.exception.code, "EXPORT_ORIGINAL")
+
+    def test_k12_question_draft_autosave_does_not_overwrite_the_draft(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temporary:
+            book = Path(temporary)
+            write_book(book)
+            rel = "page_0001/input_1_page_0001/input_1_page_0001.md"
+            folder = book / "page_0001" / "input_1_page_0001"
+            save_page(book, rel, "一. 选择题\n1. 题干\nA. 甲\nB. 乙\n", backup=True)
+            questions = folder / "input_1_page_0001.questions.json"
+            before = questions.read_bytes()
+            save_page(book, rel, "一. 选择题\n1. 改过的题干\nA. 甲\nB. 乙\n", backup=False)
+            self.assertEqual(questions.read_bytes(), before)
+            reviewed = (folder / "input_1_page_0001.reviewed.md").read_text(encoding="utf-8")
+            self.assertIn("改过的题干", reviewed)
+            save_page(book, rel, "一. 选择题\n1. A\n", backup=True, page_role="answers")
+            answer = folder / "input_1_page_0001.answers" / "1-1-ocr-1.json"
+            answer_before = answer.read_bytes()
+            save_page(book, rel, "一. 选择题\n1. B\n", backup=False, page_role="answers")
+            self.assertEqual(answer.read_bytes(), answer_before)
 
 
 if __name__ == "__main__":

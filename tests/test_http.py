@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from app.log import JsonLogger
-from app.server import Session, make_server, require_loopback
+from app.server import Session, make_server, require_loopback, resolve_port
 from core.convert import ConvertError
 
 
@@ -63,6 +63,7 @@ class HttpTests(unittest.TestCase):
                 drill = get(base + "/api/drill-error")
                 self.assertFalse(drill["ok"])
                 self.assertEqual(drill["error_code"], "DRILL")
+                self.assertEqual(drill["code"], "DRILL")
                 lines = [
                     json.loads(line)
                     for line in log_path.read_text(encoding="utf-8").splitlines()
@@ -102,6 +103,22 @@ def get(url: str) -> dict:
             return json.loads(exc.read().decode("utf-8"))
         finally:
             exc.close()
+
+
+class PortTests(unittest.TestCase):
+    def test_flag_overrides_env_and_default_is_8765(self):
+        self.assertEqual(resolve_port(["--port", "8790"], {"PORT": "8765"}), 8790)
+        self.assertEqual(resolve_port(["--port=8792"], {}), 8792)
+        self.assertEqual(resolve_port([], {}), 8765)
+        self.assertEqual(resolve_port([], {"PORT": "8791"}), 8791)
+
+    def test_bad_port_names_the_source(self):
+        with self.assertRaises(SystemExit) as caught:
+            resolve_port(["--port", "0"], {})
+        self.assertIn("65535", str(caught.exception))
+        with self.assertRaises(SystemExit) as missing:
+            resolve_port(["--port"], {})
+        self.assertIn("--port", str(missing.exception))
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ Markdown 整页是预览。点哪一行，就只把那一行变成源码，其�
 
 参考答案页用同样的题型标题和题号。选择题只写选项字母，例如 `1. A` 或 `2. A、C`。填空和解答可以写 `$...$`。`解：` 单独成行时记为步骤。`(1)`、`(2)` 至少出现两次时记为小问。每条答案是一个 `k12-answer-draft` 第 1 版文件，放在 `{文件名}.answers/` 里。文件名把键里的冒号换成连字符，例如 `1:1:ocr:1` 存成 `1-1-ocr-1.json`。勾选「采用这条扫描答案」后，这一条的 `status` 是 `confirmed`，`applicable` 是 true。同一题只采用一条。来源固定是 `ocr`。这个工具不写模型答案。
 
-字段以 k12-qbank 的 ADR 0013 和 ADR 0014 为准。题库用 `import_question_draft` 和 `import_answer_draft` 各解析一次，放进内存，不再转成另一套 JSON。没有 HTTP 导入。这个工具不调用题库，这一步也不写入题库数据库。页的种类记在 `{文件名}.page-role.txt`。换成另一种再保存时，另一种的旧文件先留着。题目导入只读 `.questions.json`。答案导入只读 `.answers/` 里的文件。
+字段以 k12-qbank 的 ADR 0013 和 ADR 0014 为准。形状文件在 `contracts/`，从题库的 `backend/catalog/contracts/` 复制，见 ADR 0017。写入前必须通过这份校验。失败错误码是 `CONTRACT`，这一次不写文件。题库用 `import_question_draft` 和 `import_answer_draft` 各解析一次，放进内存，不再转成另一套 JSON。没有 HTTP 导入。这个工具不调用题库，这一步也不写入题库数据库。页的种类记在 `{文件名}.page-role.txt`。换成另一种再保存时，另一种的旧文件先留着。题目导入只读 `.questions.json`。答案导入只读 `.answers/` 里的文件。
 
 ## 保存和导出
 

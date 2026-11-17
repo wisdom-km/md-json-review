@@ -12,6 +12,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from app.contracts import require_answer_draft, require_question_draft
 from core.answer_contract import answer_filename, to_answer_files
 from core.answer_split import split_answers
 from core.convert import ConvertError, apply_markdown, dump_json, iter_blocks, normalize_newlines
@@ -126,9 +127,13 @@ def preview_page(
         "answers": [],
     }
     if role == "answers":
-        payload["answers"] = to_answer_files(split_answers(text), page_number(rel), answer_confirms)
+        answer_files = to_answer_files(split_answers(text), page_number(rel), answer_confirms)
+        for item in answer_files:
+            require_answer_draft(item)
+        payload["answers"] = answer_files
     else:
         payload["questions"] = split_questions(text)
+        require_question_draft(to_draft_file(payload["questions"], page_number(rel)))
     return payload
 
 
@@ -162,13 +167,20 @@ def save_page(
     role_path = _role_path(md_path)
     questions_path = md_path.with_name(md_path.stem + ".questions.json")
     answer_dir = _answer_dir(md_path)
+    answer_files: list[dict] = []
+    draft: dict | None = None
+    if role == "answers":
+        answer_files = to_answer_files(split_answers(text), page_number(rel), answer_confirms)
+        for item in answer_files:
+            require_answer_draft(item)
+    else:
+        draft = to_draft_file(apply_type_overrides(split_questions(text), type_overrides), page_number(rel))
+        require_question_draft(draft)
     _inside(book, reviewed_md)
     _inside(book, reviewed_json)
     _inside(book, role_path)
     targets = [reviewed_md, reviewed_json, role_path]
-    answer_files: list[dict] = []
     if role == "answers":
-        answer_files = to_answer_files(split_answers(text), page_number(rel), answer_confirms)
         _inside(book, answer_dir)
         targets.extend(path for path in answer_dir.glob("*.json"))
     else:
@@ -181,8 +193,7 @@ def save_page(
     if role == "answers":
         _write_answer_files(book, answer_dir, answer_files)
     else:
-        split = apply_type_overrides(split_questions(text), type_overrides)
-        draft = to_draft_file(split, page_number(rel))
+        assert draft is not None
         _atomic_text(questions_path, json.dumps(draft, ensure_ascii=False, indent=2) + "\n")
     if md_path.read_bytes() != original_md or json_path.read_bytes() != original_json:
         raise ConvertError("WRITE_FAILED", "原始文件被改动了，请停止使用并检查这一页。")
@@ -221,14 +232,19 @@ def export_page(
     role = _clean_role(page_role)
     targets = [out_md, out_json]
     answer_files: list[dict] = []
+    draft: dict | None = None
     if role == "answers":
         answer_files = to_answer_files(split_answers(text), page_number(rel), answer_confirms)
+        for item in answer_files:
+            require_answer_draft(item)
         role_file = dest / f"{md_path.stem}.page-role.txt"
         answer_dest = dest / f"{md_path.stem}.answers"
         targets.append(role_file)
         if answer_dest.is_dir():
             targets.extend(answer_dest.glob("*.json"))
     else:
+        draft = to_draft_file(apply_type_overrides(split_questions(text), type_overrides), page_number(rel))
+        require_question_draft(draft)
         questions_path = dest / f"{md_path.stem}.questions.json"
         targets.append(questions_path)
     for target in targets:
@@ -241,8 +257,7 @@ def export_page(
         _atomic_text(dest / f"{md_path.stem}.page-role.txt", "answers\n")
         _write_answer_files(dest, dest / f"{md_path.stem}.answers", answer_files)
     else:
-        split = apply_type_overrides(split_questions(text), type_overrides)
-        draft = to_draft_file(split, page_number(rel))
+        assert draft is not None
         _atomic_text(
             dest / f"{md_path.stem}.questions.json",
             json.dumps(draft, ensure_ascii=False, indent=2) + "\n",

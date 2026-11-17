@@ -11,19 +11,15 @@ import re
 
 from core.convert import normalize_newlines
 from core.split import _parts
+from core.split_rules import SplitRules, marker_spans
 
-_SECTION = re.compile(
-    r"^[一二三四五六七八九十]+[.．、]\s*(单选题|多选题|选择题|填空题|解答题)\s*$"
-)
 _QUESTION = re.compile(r"^(\d+)[.．、]\s*(.*)$")
-_SUB = re.compile(r"[（(](\d+)[）)]")
 _DIVIDER = re.compile(r"^[\u4e00-\u9fff]{2,12}$")
 _STEP = re.compile(r"^(?:解[:：]|步骤\s*\d*[:：.]?)\s*(.*)$")
 _LETTER_SPLIT = re.compile(r"[,、，\s]+")
-_CHOICE = {"单选题", "多选题", "选择题"}
 
 
-def split_answers(markdown: str) -> dict:
+def split_answers(markdown: str, rules: SplitRules) -> dict:
     """Return answer drafts for one page. A page block list is not accepted here."""
     text = normalize_newlines(markdown).strip("\n")
     lines = text.split("\n") if text else []
@@ -43,12 +39,12 @@ def split_answers(markdown: str) -> dict:
 
     for index, line in enumerate(lines):
         stripped = line.strip()
-        section = _SECTION.match(stripped)
-        if section:
+        matched = rules.match_type(stripped)
+        if matched is not None:
             flush()
             mode = True
             section_index += 1
-            section_label = section.group(1)
+            section_label = matched
             continue
         if not mode:
             preface.append(line)
@@ -78,7 +74,7 @@ def split_answers(markdown: str) -> dict:
     for item in raw:
         question_key = f"{item['section_index']}:{item['number']}"
         seen[question_key] = seen.get(question_key, 0) + 1
-        answers.append(_build(item, question_key, seen[question_key]))
+        answers.append(_build(item, question_key, seen[question_key], rules))
     return {
         "ok": True,
         "reason": "" if answers or not text else "",
@@ -87,14 +83,14 @@ def split_answers(markdown: str) -> dict:
     }
 
 
-def _build(item: dict, question_key: str, ordinal: int) -> dict:
+def _build(item: dict, question_key: str, ordinal: int, rules: SplitRules) -> dict:
     body = "\n".join(item["lines"]).strip()
     label = item["section_label"]
     status = "candidate"
     if ordinal > 1 or not body:
         status = "needs_confirm"
-    if label in _CHOICE:
-        content, choice_status = _choice_content(body)
+    if label in rules.option_required_types:
+        content, choice_status = _choice_content(body, rules)
         if choice_status == "needs_confirm":
             status = "needs_confirm"
         return {
@@ -104,7 +100,7 @@ def _build(item: dict, question_key: str, ordinal: int) -> dict:
             "content": content,
             "parts": [],
         }
-    shared, subs = _peel_subs(body)
+    shared, subs = _peel_subs(body, rules)
     if subs:
         shared_result, shared_steps = _steps(shared)
         content = _parts(shared_result)
@@ -135,24 +131,24 @@ def _build(item: dict, question_key: str, ordinal: int) -> dict:
     }
 
 
-def _choice_content(body: str) -> tuple[list[dict], str]:
+def _choice_content(body: str, rules: SplitRules) -> tuple[list[dict], str]:
     compact = re.sub(r"\s+", "", body)
     if not compact:
         return [], "needs_confirm"
-    if re.fullmatch(r"[A-D](?:[,、，][A-D])*|[A-D]{1,4}", compact) is None:
+    if rules.choice_body.fullmatch(compact) is None:
         return _parts(body), "needs_confirm"
     if any(mark in compact for mark in (",", "、", "，")):
         letters = [part for part in _LETTER_SPLIT.split(compact) if part]
     else:
         letters = list(compact)
-    if len(letters) != len(set(letters)) or any(len(letter) != 1 for letter in letters):
+    if len(letters) != len(set(letters)) or any(letter not in rules.option_keys for letter in letters):
         return _parts(body), "needs_confirm"
     value = letters[0] if len(letters) == 1 else ",".join(letters)
     return [{"type": "text", "value": value}], "candidate"
 
 
-def _peel_subs(body: str) -> tuple[str, list[tuple[str, str]]]:
-    marks = list(_SUB.finditer(body))
+def _peel_subs(body: str, rules: SplitRules) -> tuple[str, list[tuple[str, str]]]:
+    marks = marker_spans(body, rules.subquestion_markers)
     if len(marks) < 2:
         return body.strip(), []
     shared = body[: marks[0].start()].strip()

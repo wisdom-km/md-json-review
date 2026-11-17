@@ -11,6 +11,9 @@ from app.store import export_page, read_page, save_page
 from core.answer_contract import answer_filename, to_answer_files
 from core.answer_split import split_answers
 from core.split import split_questions
+from rules_loader import shipped_rules
+
+RULES = shipped_rules()
 
 FILE_KEYS = {
     "contract",
@@ -44,24 +47,25 @@ def write_book(root: Path) -> None:
 class AnswerSplitTests(unittest.TestCase):
     def test_choice_letters_match_the_question_key(self):
         page = "一. 选择题\n1. A\n2. AC\n"
-        split = split_answers(page)
+        split = split_answers(page, RULES)
         self.assertTrue(split["ok"])
         self.assertEqual([item["key"] for item in split["answers"]], ["1:1:ocr:1", "1:2:ocr:1"])
         self.assertEqual(split["answers"][0]["content"], [{"type": "text", "value": "A"}])
         self.assertEqual(split["answers"][1]["content"], [{"type": "text", "value": "A,C"}])
         self.assertEqual(split["answers"][0]["parts"], [])
-        refused = split_questions(page)
-        self.assertFalse(refused["ok"])
+        as_questions = split_questions(page, RULES)
+        self.assertTrue(as_questions["ok"])
+        self.assertEqual(as_questions["questions"][0]["status"], "needs_confirm")
 
     def test_words_and_repeated_letters_need_confirm(self):
-        split = split_answers("一. 选择题\n1. 见解析\n2. A,A\n")
+        split = split_answers("一. 选择题\n1. 见解析\n2. A,A\n", RULES)
         self.assertEqual(split["answers"][0]["status"], "needs_confirm")
         self.assertEqual(split["answers"][0]["content"][0]["value"], "见解析")
         self.assertEqual(split["answers"][1]["status"], "needs_confirm")
 
     def test_fill_math_and_worked_steps_keep_parts(self):
         page = "一. 填空题\n4. $2$\n\n二. 解答题\n7. 结果 $2$\n解：先算\n(1) $1$\n解：再算\n(2) $3$\n"
-        split = split_answers(page)
+        split = split_answers(page, RULES)
         fill = split["answers"][0]
         worked = split["answers"][1]
         self.assertEqual(fill["question_key"], "1:4")
@@ -74,7 +78,7 @@ class AnswerSplitTests(unittest.TestCase):
 
     def test_confirm_writes_the_answer_table_keys(self):
         files = to_answer_files(
-            split_answers("一. 选择题\n1. A\n"),
+            split_answers("一. 选择题\n1. A\n", RULES),
             3,
             ["1:1:ocr:1"],
         )

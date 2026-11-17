@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app.contracts import require_answer_draft, require_question_draft
+from app.split_rules import load_split_rules
 from core.answer_contract import answer_filename, to_answer_files
 from core.answer_split import split_answers
 from core.convert import ConvertError, apply_markdown, dump_json, iter_blocks, normalize_newlines
@@ -98,7 +99,7 @@ def read_page(book: Path, rel: str) -> dict:
         "preview": preview,
         "preview_error": preview_error,
         "page_role": role,
-        "questions": split_questions(text) if role == "questions" else None,
+        "questions": split_questions(text, load_split_rules()) if role == "questions" else None,
         "answers": _saved_answers(md_path) if role == "answers" else [],
         "has_reviewed": reviewed_md.is_file(),
     }
@@ -127,12 +128,12 @@ def preview_page(
         "answers": [],
     }
     if role == "answers":
-        answer_files = to_answer_files(split_answers(text), page_number(rel), answer_confirms)
+        answer_files = to_answer_files(split_answers(text, load_split_rules()), page_number(rel), answer_confirms)
         for item in answer_files:
             require_answer_draft(item)
         payload["answers"] = answer_files
     else:
-        payload["questions"] = split_questions(text)
+        payload["questions"] = split_questions(text, load_split_rules())
         require_question_draft(to_draft_file(payload["questions"], page_number(rel)))
     return payload
 
@@ -170,11 +171,11 @@ def save_page(
     answer_files: list[dict] = []
     draft: dict | None = None
     if role == "answers":
-        answer_files = to_answer_files(split_answers(text), page_number(rel), answer_confirms)
+        answer_files = to_answer_files(split_answers(text, load_split_rules()), page_number(rel), answer_confirms)
         for item in answer_files:
             require_answer_draft(item)
     else:
-        draft = to_draft_file(apply_type_overrides(split_questions(text), type_overrides), page_number(rel))
+        draft = to_draft_file(apply_type_overrides(split_questions(text, load_split_rules()), type_overrides), page_number(rel))
         require_question_draft(draft)
     _inside(book, reviewed_md)
     _inside(book, reviewed_json)
@@ -234,7 +235,7 @@ def export_page(
     answer_files: list[dict] = []
     draft: dict | None = None
     if role == "answers":
-        answer_files = to_answer_files(split_answers(text), page_number(rel), answer_confirms)
+        answer_files = to_answer_files(split_answers(text, load_split_rules()), page_number(rel), answer_confirms)
         for item in answer_files:
             require_answer_draft(item)
         role_file = dest / f"{md_path.stem}.page-role.txt"
@@ -243,7 +244,7 @@ def export_page(
         if answer_dest.is_dir():
             targets.extend(answer_dest.glob("*.json"))
     else:
-        draft = to_draft_file(apply_type_overrides(split_questions(text), type_overrides), page_number(rel))
+        draft = to_draft_file(apply_type_overrides(split_questions(text, load_split_rules()), type_overrides), page_number(rel))
         require_question_draft(draft)
         questions_path = dest / f"{md_path.stem}.questions.json"
         targets.append(questions_path)

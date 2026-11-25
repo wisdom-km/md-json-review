@@ -9,6 +9,9 @@ const jsonPane = document.getElementById("json");
 const drafts = document.getElementById("drafts");
 const draftHeading = document.getElementById("draft-heading");
 const pageRoleSelect = document.getElementById("page-role");
+const lessonBar = document.getElementById("lesson-bar");
+const lessonInput = document.getElementById("default-lesson");
+let answerMeta = null;
 const rules = document.getElementById("rules");
 const undoButton = document.getElementById("undo");
 const saveButton = document.getElementById("save");
@@ -130,8 +133,15 @@ exportButton.addEventListener("click", () => exportCurrent());
 pageRoleSelect.addEventListener("change", () => {
   answerConfirms = {};
   typeOverrides = {};
+  syncLessonBar();
   noteEdit();
 });
+if (lessonInput) {
+  lessonInput.addEventListener("input", () => {
+    window.clearTimeout(jsonTimer);
+    jsonTimer = window.setTimeout(() => refreshJson(), 300);
+  });
+}
 prevButton.addEventListener("click", () => step(-1));
 nextButton.addEventListener("click", () => step(1));
 pageSelect.addEventListener("change", () => goTo(pageSelect.value));
@@ -260,6 +270,8 @@ async function selectPage(rel) {
   exportButton.disabled = false;
   pageRoleSelect.disabled = false;
   pageRoleSelect.value = payload.page_role === "answers" ? "answers" : "questions";
+  if (lessonInput) lessonInput.value = payload.default_lesson || "";
+  syncLessonBar();
   editToken += 1;
   typeOverrides = {};
   answerConfirms = {};
@@ -516,6 +528,7 @@ async function refreshJson() {
     markdown: sourceText,
     page_role: pageRole(),
     answer_confirms: confirmList(),
+    default_lesson: currentLesson(),
   });
   if (serial !== previewSerial) return;
   if (!payload.ok) {
@@ -536,11 +549,22 @@ function pageRole() {
   return pageRoleSelect.value === "answers" ? "answers" : "questions";
 }
 
+function syncLessonBar() {
+  if (!lessonBar) return;
+  lessonBar.hidden = pageRole() !== "answers";
+}
+
+function currentLesson() {
+  if (!lessonInput || pageRole() !== "answers") return "";
+  return lessonInput.value || "";
+}
+
 function confirmList() {
   return Object.keys(answerConfirms);
 }
 
 function renderSide(payload) {
+  answerMeta = payload.answer_meta || null;
   if (pageRole() === "answers") renderAnswers(payload.answers || []);
   else renderDrafts(payload.questions);
 }
@@ -552,7 +576,7 @@ function renderAnswers(files) {
   const note = document.createElement("p");
   note.className = "draft-note";
   if (!files.length) {
-    note.textContent = "还没有答案。题型标题和题号要和题目页一致，例如「一. 选择题」下面写「1. A」。";
+    note.textContent = "还没有答案。题型标题可以是「一. 选择题」或「1. 选择题」。同一行的「1. A  2. B」会拆成两条。";
     drafts.appendChild(note);
     return;
   }
@@ -563,6 +587,9 @@ function renderAnswers(files) {
     card.className = "draft";
     const title = document.createElement("strong");
     title.textContent = `${item.question_key} · ${answerStatus(item.status)}`;
+    const lesson = document.createElement("p");
+    lesson.className = "draft-lesson";
+    lesson.textContent = lessonName(item.key);
     const body = document.createElement("p");
     body.textContent = answerBody(item);
     const label = document.createElement("label");
@@ -582,9 +609,16 @@ function renderAnswers(files) {
       noteEdit();
     });
     label.append(box, document.createTextNode("采用这条扫描答案"));
-    card.append(title, body, label);
+    card.append(title, lesson, body, label);
     drafts.appendChild(card);
   });
+}
+
+function lessonName(key) {
+  const rows = answerMeta && Array.isArray(answerMeta.answers) ? answerMeta.answers : [];
+  const row = rows.find((item) => item && item.key === key);
+  const title = row && row.lesson_title ? String(row.lesson_title).trim() : "";
+  return title || "未指定课时";
 }
 
 function answerStatus(status) {
@@ -713,6 +747,7 @@ async function saveCurrent(manual) {
     type_overrides: typeOverrides,
     page_role: pageRole(),
     answer_confirms: confirmList(),
+    default_lesson: currentLesson(),
   });
   if (!payload.ok) {
     showFailure(payload);
@@ -766,6 +801,7 @@ async function exportCurrent() {
     page_role: pageRole(),
     answer_confirms: confirmList(),
     type_overrides: typeOverrides,
+    default_lesson: currentLesson(),
   });
   if (!payload.ok) {
     showFailure(payload);

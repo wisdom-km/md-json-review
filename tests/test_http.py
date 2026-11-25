@@ -4,6 +4,7 @@ import tempfile
 import threading
 import unittest
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -101,6 +102,90 @@ class HttpTests(unittest.TestCase):
                 self.assertIn("导出成功", exported["message"])
                 self.assertIn(str(dest.resolve()), exported["message"])
                 self.assertNotIn(str(dest.resolve()), daily.read_text(encoding="utf-8"))
+            finally:
+                server.shutdown()
+                server.server_close()
+
+    def test_answer_lesson_routes_use_a_free_port(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            book = Path(temporary)
+            write_book(book)
+            logger = JsonLogger(book / "app.jsonl", "INFO")
+            server = make_server("127.0.0.1", 0, logger, Session())
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            port = server.server_address[1]
+            self.assertNotEqual(port, 8765)
+            base = f"http://127.0.0.1:{port}"
+            markdown = "## synth-lesson-1\n1. 选择题\n1. A\n"
+            try:
+                opened = post(
+                    base + "/api/open",
+                    {"book_dir": str(book), "pdf_path": str(book / "origin.pdf")},
+                )
+                rel = opened["pages"][0]["rel"]
+                preview = post(
+                    base + "/api/preview",
+                    {
+                        "rel": rel,
+                        "markdown": markdown,
+                        "page_role": "answers",
+                        "default_lesson": "synth-carried",
+                    },
+                )
+                self.assertEqual(preview["default_lesson"], "synth-carried")
+                self.assertEqual(preview["answer_meta"]["answers"][0]["lesson_title"], "synth-lesson-1")
+                self.assertNotIn("lesson_title", preview["answers"][0])
+                saved = post(
+                    base + "/api/save",
+                    {
+                        "rel": rel,
+                        "markdown": markdown,
+                        "backup": True,
+                        "page_role": "answers",
+                        "default_lesson": "synth-carried",
+                    },
+                )
+                self.assertTrue(saved["ok"], saved)
+                meta = book / "page_0001" / "input_1_page_0001" / "input_1_page_0001.answers-meta.json"
+                answers = book / "page_0001" / "input_1_page_0001" / "input_1_page_0001.answers"
+                self.assertTrue(meta.is_file())
+                self.assertFalse((answers / meta.name).exists())
+                page = get(base + "/api/page?rel=" + urllib.parse.quote(rel))
+                self.assertEqual(page["default_lesson"], "synth-carried")
+                self.assertEqual(page["answer_meta"]["answers"][0]["key"], "1:1:ocr:1")
+                frozen = meta.read_bytes()
+                post(
+                    base + "/api/save",
+                    {
+                        "rel": rel,
+                        "markdown": markdown + "\n",
+                        "backup": False,
+                        "page_role": "answers",
+                        "default_lesson": "synth-other",
+                    },
+                )
+                self.assertEqual(meta.read_bytes(), frozen)
+                dest = Path(temporary) / "out"
+                dest.mkdir()
+                exported = post(
+                    base + "/api/export",
+                    {
+                        "rel": rel,
+                        "markdown": markdown,
+                        "export_dir": str(dest),
+                        "page_role": "answers",
+                        "default_lesson": "synth-carried",
+                    },
+                )
+                self.assertTrue(exported["ok"], exported)
+                exported_meta = dest / "input_1_page_0001.answers-meta.json"
+                self.assertTrue(exported_meta.is_file())
+                self.assertFalse((dest / "input_1_page_0001.answers" / exported_meta.name).exists())
+                self.assertEqual(
+                    json.loads(exported_meta.read_text(encoding="utf-8"))["default_lesson"],
+                    "synth-carried",
+                )
             finally:
                 server.shutdown()
                 server.server_close()

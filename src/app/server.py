@@ -35,6 +35,11 @@ def _answer_confirms(body: dict) -> list[str]:
     return [item for item in raw if isinstance(item, str)]
 
 
+def _default_lesson(body: dict) -> str:
+    raw = body.get("default_lesson", "")
+    return raw if isinstance(raw, str) else ""
+
+
 class Session:
     def __init__(self) -> None:
         self.lock = threading.Lock()
@@ -190,6 +195,7 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                         body.get("markdown", ""),
                         page_role=_page_role(body),
                         answer_confirms=_answer_confirms(body),
+                        default_lesson=_default_lesson(body),
                     )
                 payload["ok"] = True
                 payload["request_id"] = request_id
@@ -210,6 +216,7 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                         type_overrides=body.get("type_overrides") or {},
                         page_role=_page_role(body),
                         answer_confirms=_answer_confirms(body),
+                        default_lesson=_default_lesson(body),
                     )
                 logger.event(
                     "INFO",
@@ -240,6 +247,7 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                         page_role=_page_role(body),
                         answer_confirms=_answer_confirms(body),
                         type_overrides=body.get("type_overrides") or {},
+                        default_lesson=_default_lesson(body),
                     )
                 logger.event(
                     "INFO",

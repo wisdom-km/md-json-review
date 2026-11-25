@@ -79,7 +79,7 @@ def read_page(book: Path, rel: str) -> dict:
     preview, preview_error = preview_document(document, markdown)
     text = normalize_newlines(markdown)
     role = _read_role(md_path)
-    return {
+    payload = {
         "rel": rel,
         "page_no": page_number(rel),
         "label": _page_label(rel),
@@ -92,7 +92,14 @@ def read_page(book: Path, rel: str) -> dict:
         "questions": _questions_or_none(text, role),
         "answers": _saved_answers(md_path) if role == "answers" else [],
         "has_reviewed": reviewed_md.is_file(),
+        "default_lesson": "",
+        "answer_meta": None,
     }
+    if role == "answers":
+        default_lesson, answer_meta = _load_answer_meta(md_path)
+        payload["default_lesson"] = default_lesson
+        payload["answer_meta"] = answer_meta
+    return payload
 
 
 def _questions_or_none(text: str, role: str):
@@ -156,6 +163,14 @@ def _answer_dir(md_path: Path) -> Path:
     return md_path.with_name(md_path.stem + ".answers")
 
 
+def _meta_path(md_path: Path) -> Path:
+    """Lesson sidecar beside .answers/, never inside it.
+
+    The question bank reads every JSON in .answers/ as a k12-answer-draft.
+    """
+    return md_path.with_name(md_path.stem + ".answers-meta.json")
+
+
 def _clean_role(raw: object) -> str:
     return "answers" if raw == "answers" else "questions"
 
@@ -165,6 +180,43 @@ def _read_role(md_path: Path) -> str:
     if not path.is_file():
         return "questions"
     return _clean_role(path.read_text(encoding="utf-8").strip())
+
+
+def _load_answer_meta(md_path: Path) -> tuple[str, dict | None]:
+    path = _meta_path(md_path)
+    if not path.is_file():
+        return "", None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return "", None
+    if not isinstance(payload, dict):
+        return "", None
+    raw_default = payload.get("default_lesson", "")
+    default_lesson = raw_default.strip() if isinstance(raw_default, str) else ""
+    answers = payload.get("answers")
+    clean = []
+    if isinstance(answers, list):
+        for item in answers:
+            if not isinstance(item, dict):
+                continue
+            key = item.get("key")
+            question_key = item.get("question_key")
+            title = item.get("lesson_title", "")
+            if not isinstance(key, str) or not isinstance(question_key, str):
+                continue
+            if not isinstance(title, str):
+                title = ""
+            clean.append({"key": key, "question_key": question_key, "lesson_title": title})
+    pdf_page = payload.get("pdf_page")
+    if isinstance(pdf_page, bool) or not isinstance(pdf_page, int):
+        pdf_page = page_number(md_path.as_posix())
+    return default_lesson, {
+        "schema_version": 1,
+        "pdf_page": pdf_page,
+        "default_lesson": default_lesson,
+        "answers": clean,
+    }
 
 
 def _saved_answers(md_path: Path) -> list[dict]:

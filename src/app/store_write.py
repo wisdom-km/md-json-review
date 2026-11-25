@@ -13,6 +13,7 @@ from app.store_read import (
     _clean_role,
     _inside,
     _load_json,
+    _meta_path,
     _page_md,
     _reviewed_md,
     _role_path,
@@ -33,12 +34,13 @@ def save_page(
     type_overrides: object = None,
     page_role: str = "questions",
     answer_confirms: object = None,
+    default_lesson: str = "",
 ) -> dict:
     """Write reviewed copies beside the book. Does not touch originals.
 
     Automatic saves pass backup=False. They write only the .reviewed files and
-    do not replace .questions.json or .answers. A manual save keeps the previous
-    reviewed copy and then overwrites the draft files.
+    do not replace .questions.json, .answers, or the sibling .answers-meta.json.
+    A manual save keeps the previous reviewed copy and then overwrites the draft files.
     """
     md_path = _page_md(book, rel)
     json_path = md_path.with_suffix(".json")
@@ -54,18 +56,28 @@ def save_page(
     questions_path = md_path.with_name(md_path.stem + ".questions.json")
     answer_dir = _answer_dir(md_path)
     if backup:
-        answer_files, draft = checked_drafts(text, page_number(rel), role, answer_confirms, type_overrides)
+        answer_files, draft, meta = checked_drafts(
+            text,
+            page_number(rel),
+            role,
+            answer_confirms,
+            type_overrides,
+            default_lesson=default_lesson,
+        )
     else:
-        answer_files, draft = [], None
+        answer_files, draft, meta = [], None, None
     _inside(book, reviewed_md)
     _inside(book, reviewed_json)
     targets = [reviewed_md, reviewed_json]
+    meta_path = _meta_path(md_path)
     if backup:
         _inside(book, role_path)
         targets.append(role_path)
         if role == "answers":
             _inside(book, answer_dir)
+            _inside(book, meta_path)
             targets.extend(path for path in answer_dir.glob("*.json"))
+            targets.append(meta_path)
         else:
             _inside(book, questions_path)
             targets.append(questions_path)
@@ -76,6 +88,7 @@ def save_page(
         _atomic_text(role_path, role + "\n")
         if role == "answers":
             _write_answer_files(book, answer_dir, answer_files)
+            _atomic_text(meta_path, _meta_text(meta))
         else:
             assert draft is not None
             _atomic_text(questions_path, json.dumps(draft, ensure_ascii=False, indent=2) + "\n")
@@ -101,6 +114,7 @@ def export_page(
     page_role: str = "questions",
     answer_confirms: object = None,
     type_overrides: object = None,
+    default_lesson: str = "",
 ) -> dict:
     """Copy the current page and its draft files. Originals stay put."""
     md_path = _page_md(book, rel)
@@ -115,11 +129,20 @@ def export_page(
     out_json = dest / f"{json_path.stem}.json"
     role = _clean_role(page_role)
     targets = [out_md, out_json]
-    answer_files, draft = checked_drafts(text, page_number(rel), role, answer_confirms, type_overrides)
+    answer_files, draft, meta = checked_drafts(
+        text,
+        page_number(rel),
+        role,
+        answer_confirms,
+        type_overrides,
+        default_lesson=default_lesson,
+    )
     if role == "answers":
         role_file = dest / f"{md_path.stem}.page-role.txt"
         answer_dest = dest / f"{md_path.stem}.answers"
+        meta_dest = dest / f"{md_path.stem}.answers-meta.json"
         targets.append(role_file)
+        targets.append(meta_dest)
         if answer_dest.is_dir():
             targets.extend(answer_dest.glob("*.json"))
     else:
@@ -134,6 +157,7 @@ def export_page(
     if role == "answers":
         _atomic_text(dest / f"{md_path.stem}.page-role.txt", "answers\n")
         _write_answer_files(dest, dest / f"{md_path.stem}.answers", answer_files)
+        _atomic_text(dest / f"{md_path.stem}.answers-meta.json", _meta_text(meta))
     else:
         assert draft is not None
         _atomic_text(
@@ -151,6 +175,16 @@ def export_page(
         "backed_up": backed_up,
         "export_dir": str(dest),
     }
+
+
+def _meta_text(meta: dict | None) -> str:
+    payload = meta or {
+        "schema_version": 1,
+        "pdf_page": None,
+        "default_lesson": "",
+        "answers": [],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
 
 def _export_dir(raw: str) -> Path:

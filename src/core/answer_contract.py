@@ -35,6 +35,27 @@ def to_answer_files(split: dict, pdf_page: int | None, confirms: object) -> list
     return files
 
 
+def to_answer_meta(split: dict, pdf_page: int | None, default_lesson: str) -> dict:
+    """Lesson titles sit beside the drafts. They are not answer-draft fields."""
+    lesson = default_lesson.strip() if isinstance(default_lesson, str) else ""
+    rows = []
+    for item in split.get("answers") or []:
+        title = item.get("lesson_title") or ""
+        rows.append(
+            {
+                "key": item["key"],
+                "question_key": item["question_key"],
+                "lesson_title": title if isinstance(title, str) else "",
+            }
+        )
+    return {
+        "schema_version": 1,
+        "pdf_page": pdf_page,
+        "default_lesson": lesson,
+        "answers": rows,
+    }
+
+
 def answer_filename(answer_key: str) -> str:
     """Windows file name. The JSON key still uses colons."""
     return answer_key.replace(":", "-") + ".json"

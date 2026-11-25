@@ -252,6 +252,24 @@ iframe, textarea, .json, .rendered {
 
 .json[data-state="error"] { color: #8c2f2f; }
 
+.lesson-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.lesson-bar[hidden] { display: none; }
+
+.lesson-bar input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+}
+
+.draft-lesson { color: #5c564c; font-size: 13px; }
+
 .drafts {
   max-height: 42%;
   overflow: auto;

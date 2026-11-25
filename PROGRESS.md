@@ -5,3 +5,5 @@
 下一步：下一次公开用分支和 PR。连上 PostgreSQL 时由题库按 ADR 0014 建答案表，不在这个工具里建，也不在这里连接数据库。
 
 卡住：无。公共仓库和 CI 已跑通。当前 main 是 `5d41fcd`。https://github.com/wisdom-km/md-json-review/actions/runs/44077771910
+
+2026-11-25：参考答案页认 `1. 选择题` 这类数字题型标题，能拆开同一行里的多个答案，并把每条答案的课时写在同级 `<stem>.answers-meta.json`。不改两份 k12 契约，也不把课时写进答案草稿。`py -3 -m unittest discover -s tests` 为 64 个测试通过。

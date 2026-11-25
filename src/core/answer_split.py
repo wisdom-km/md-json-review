@@ -17,10 +17,21 @@ _QUESTION = re.compile(r"^(\d+)[.．、]\s*(.*)$")
 _DIVIDER = re.compile(r"^[\u4e00-\u9fff]{2,12}$")
 _STEP = re.compile(r"^(?:解[:：]|步骤\s*\d*[:：.]?)\s*(.*)$")
 _LETTER_SPLIT = re.compile(r"[,、，\s]+")
+_HEADING = re.compile(r"^(#{2,4})(?!#)\s*(.*?)\s*$")
+_INLINE = re.compile(r"\s+(\d+)[.．、](?!\d)")
+_CHAPTER = re.compile(r"^第.+章")
+_CN_CHAPTER = re.compile(r"^[一二三四五六七八九十]+、")
+_FINER_LESSON = re.compile(r"\d+\.\d+|第.+节|课时")
+_LESSON_MARK = re.compile(r"^(?:课时[:：]|【课时】)\s*(.*)$")
 
 
-def split_answers(markdown: str, rules: SplitRules) -> dict:
-    """Return answer drafts for one page. A page block list is not accepted here."""
+def split_answers(markdown: str, rules: SplitRules, default_lesson: str = "") -> dict:
+    """Return answer drafts for one page. A page block list is not accepted here.
+
+    default_lesson is the lesson already open on the previous page. Headings on
+    this page replace it. lesson_title stays on the in-memory row and is not a
+    k12-answer-draft field.
+    """
     text = normalize_newlines(markdown).strip("\n")
     lines = text.split("\n") if text else []
     preface: list[str] = []
@@ -29,6 +40,7 @@ def split_answers(markdown: str, rules: SplitRules) -> dict:
     section_label = ""
     section_index = 0
     current: dict | None = None
+    current_lesson = default_lesson.strip() if isinstance(default_lesson, str) else ""
 
     def flush() -> None:
         nonlocal current
@@ -37,20 +49,50 @@ def split_answers(markdown: str, rules: SplitRules) -> dict:
         raw.append(current)
         current = None
 
+    def open_section(label: str) -> None:
+        nonlocal mode, section_index, section_label
+        flush()
+        mode = True
+        section_index += 1
+        section_label = label
+
+    def open_lesson(title: str) -> None:
+        nonlocal mode, section_index, section_label, current_lesson
+        flush()
+        current_lesson = title.strip()
+        section_index = 0
+        mode = False
+        section_label = ""
+
     for index, line in enumerate(lines):
         stripped = line.strip()
+        heading = _HEADING.match(stripped)
+        if heading:
+            title = heading.group(2).strip()
+            if not title or "参考答案" in title or title == "目录":
+                continue
+            matched = rules.match_type(title)
+            if matched is not None:
+                open_section(matched)
+                continue
+            if _SECTION_SHAPE.match(title):
+                open_section("")
+                continue
+            if _is_pure_chapter(title):
+                continue
+            open_lesson(title)
+            continue
+        if not mode:
+            mark = _LESSON_MARK.match(stripped)
+            if mark:
+                current_lesson = mark.group(1).strip()
+                continue
         matched = rules.match_type(stripped)
         if matched is not None:
-            flush()
-            mode = True
-            section_index += 1
-            section_label = matched
+            open_section(matched)
             continue
         if _SECTION_SHAPE.match(stripped):
-            flush()
-            mode = True
-            section_index += 1
-            section_label = ""
+            open_section("")
             continue
         if not mode:
             preface.append(line)
@@ -62,25 +104,39 @@ def split_answers(markdown: str, rules: SplitRules) -> dict:
             continue
         question = _QUESTION.match(stripped)
         if question:
+            pieces = _inline_pieces(stripped)
             flush()
-            current = {
-                "number": question.group(1),
-                "lines": [question.group(2)],
-                "section_label": section_label,
-                "section_index": section_index,
-            }
+            if not pieces:
+                current = _raw_item(
+                    question.group(1),
+                    question.group(2),
+                    section_label,
+                    section_index,
+                    current_lesson,
+                )
+                continue
+            for number, body in pieces[:-1]:
+                raw.append(_raw_item(number, body, section_label, section_index, current_lesson))
+            number, body = pieces[-1]
+            current = _raw_item(number, body, section_label, section_index, current_lesson)
             continue
         if current is None:
             continue
         current["lines"].append(line)
     flush()
 
-    seen: dict[str, int] = {}
+    seen_page: dict[str, int] = {}
+    seen_lesson: dict[tuple[str, str], int] = {}
     answers = []
     for item in raw:
         question_key = f"{item['section_index']}:{item['number']}"
-        seen[question_key] = seen.get(question_key, 0) + 1
-        answers.append(_build(item, question_key, seen[question_key], rules))
+        lesson_title = item.get("lesson_title") or ""
+        seen_page[question_key] = seen_page.get(question_key, 0) + 1
+        pair = (lesson_title, question_key)
+        seen_lesson[pair] = seen_lesson.get(pair, 0) + 1
+        answers.append(
+            _build(item, question_key, seen_page[question_key], seen_lesson[pair], rules)
+        )
     return {
         "ok": True,
         "reason": "" if answers or not text else "",
@@ -89,11 +145,17 @@ def split_answers(markdown: str, rules: SplitRules) -> dict:
     }
 
 
-def _build(item: dict, question_key: str, ordinal: int, rules: SplitRules) -> dict:
+def _build(
+    item: dict,
+    question_key: str,
+    page_ordinal: int,
+    lesson_ordinal: int,
+    rules: SplitRules,
+) -> dict:
     body = "\n".join(item["lines"]).strip()
     label = item["section_label"]
     status = "candidate"
-    if ordinal > 1 or not body:
+    if lesson_ordinal > 1 or not body:
         status = "needs_confirm"
     if label in rules.option_required_types:
         content, choice_status = _choice_content(body, rules)
@@ -101,7 +163,8 @@ def _build(item: dict, question_key: str, ordinal: int, rules: SplitRules) -> di
             status = "needs_confirm"
         return {
             "question_key": question_key,
-            "key": f"{question_key}:ocr:{ordinal}",
+            "key": f"{question_key}:ocr:{page_ordinal}",
+            "lesson_title": item.get("lesson_title") or "",
             "status": status,
             "content": content,
             "parts": [],
@@ -117,7 +180,8 @@ def _build(item: dict, question_key: str, ordinal: int, rules: SplitRules) -> di
             status = "needs_confirm"
         return {
             "question_key": question_key,
-            "key": f"{question_key}:ocr:{ordinal}",
+            "key": f"{question_key}:ocr:{page_ordinal}",
+            "lesson_title": item.get("lesson_title") or "",
             "status": status,
             "content": content,
             "parts": parts,
@@ -130,11 +194,109 @@ def _build(item: dict, question_key: str, ordinal: int, rules: SplitRules) -> di
         status = "needs_confirm"
     return {
         "question_key": question_key,
-        "key": f"{question_key}:ocr:{ordinal}",
+        "key": f"{question_key}:ocr:{page_ordinal}",
+            "lesson_title": item.get("lesson_title") or "",
         "status": status,
         "content": content,
         "parts": parts,
     }
+
+
+def _raw_item(
+    number: str,
+    body: str,
+    section_label: str,
+    section_index: int,
+    lesson_title: str,
+) -> dict:
+    return {
+        "number": number,
+        "lines": [body],
+        "section_label": section_label,
+        "section_index": section_index,
+        "lesson_title": lesson_title,
+    }
+
+
+def _is_pure_chapter(title: str) -> bool:
+    """A chapter line is not a lesson, and it must not replace a finer lesson."""
+    if _FINER_LESSON.search(title):
+        return False
+    return _CHAPTER.match(title) is not None or _CN_CHAPTER.match(title) is not None
+
+
+def _inline_pieces(line: str) -> list[tuple[str, str]] | None:
+    """Split one answer line on later, strictly increasing question numbers.
+
+    Markers inside $...$ or $$...$$ stay put. A decimal such as 3.5 is not a
+    marker. Text ending in 步骤 or 第 is not a marker either.
+    """
+    head = _QUESTION.match(line)
+    if head is None:
+        return None
+    spans = _math_spans(line)
+    previous = int(head.group(1))
+    cuts: list[tuple[int, int, str]] = []
+    for match in _INLINE.finditer(line):
+        number_at = match.start(1)
+        if _in_span(spans, number_at):
+            continue
+        if line[: match.start()].endswith(("步骤", "第")):
+            continue
+        number = int(match.group(1))
+        if number <= previous:
+            continue
+        previous = number
+        cuts.append((match.start(), match.end(), match.group(1)))
+    if not cuts:
+        return None
+    pieces: list[tuple[str, str]] = []
+    first_from = head.start(2)
+    first_end = _rstrip_index(line, cuts[0][0], first_from)
+    pieces.append((head.group(1), line[first_from:first_end].strip()))
+    for index, (_whitespace_at, content_at, number) in enumerate(cuts):
+        if index + 1 < len(cuts):
+            end = _rstrip_index(line, cuts[index + 1][0], content_at)
+            body = line[content_at:end].strip()
+        else:
+            body = line[content_at:].strip()
+        pieces.append((number, body))
+    return pieces
+
+
+def _rstrip_index(line: str, index: int, stop: int) -> int:
+    while index > stop and line[index - 1].isspace():
+        index -= 1
+    return index
+
+
+def _math_spans(text: str) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    index = 0
+    limit = len(text)
+    while index < limit:
+        if text.startswith("$$", index):
+            end = text.find("$$", index + 2)
+            if end < 0:
+                spans.append((index, limit))
+                break
+            spans.append((index, end + 2))
+            index = end + 2
+            continue
+        if text[index] == "$":
+            end = text.find("$", index + 1)
+            if end < 0:
+                spans.append((index, limit))
+                break
+            spans.append((index, end + 1))
+            index = end + 1
+            continue
+        index += 1
+    return spans
+
+
+def _in_span(spans: list[tuple[int, int]], pos: int) -> bool:
+    return any(start <= pos < end for start, end in spans)
 
 
 def _choice_content(body: str, rules: SplitRules) -> tuple[list[dict], str]:

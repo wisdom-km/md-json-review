@@ -10,7 +10,7 @@
 
 ## 日志
 
-`logs/app.jsonl` 和终端。每条有 `request_id`。不记正文、密钥、家目录绝对路径。
+`logs/app-YYYY-MM-DD.jsonl` 和终端。按本机日期一天一个文件。每条有 `request_id`。不记正文、密钥、家目录绝对路径。
 
 ## 禁止
 

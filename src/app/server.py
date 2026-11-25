@@ -163,7 +163,7 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                 return self._send_json(200, payload)
             if method == "POST" and route == "/api/pick":
                 body = self._read_json()
-                chosen = pick_path(str(body.get("kind", "")))
+                chosen = pick_path(str(body.get("kind", "")), str(body.get("initial", "")))
                 return self._send_json(
                     200,
                     {
@@ -222,9 +222,9 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                 payload["ok"] = True
                 payload["request_id"] = request_id
                 if payload["page_role"] == "answers":
-                    lead = "已保存参考答案。" if manual else "已自动保存参考答案。"
+                    lead = "保存成功。参考答案已写入。" if manual else "已自动保存参考答案。"
                 else:
-                    lead = "已保存。" if manual else "已自动保存。"
+                    lead = "保存成功。" if manual else "已自动保存。"
                 payload["message"] = lead + "原始 Markdown 和原始 JSON 没有改。"
                 return self._send_json(200, payload)
             if method == "POST" and route == "/api/export":
@@ -251,15 +251,15 @@ def make_server(host: str, port: int, logger: JsonLogger, session: Session) -> T
                 )
                 payload["ok"] = True
                 payload["request_id"] = request_id
+                folder = payload["export_dir"]
                 if payload["page_role"] == "answers":
-                    payload["message"] = (
-                        f"已导出 {payload['markdown_name']}、{payload['json_name']}"
-                        f" 和 {payload['answer_count']} 份答案。"
+                    written = (
+                        f"{payload['markdown_name']}、{payload['json_name']}"
+                        f" 和 {payload['answer_count']} 份答案"
                     )
                 else:
-                    payload["message"] = (
-                        f"已导出 {payload['markdown_name']}、{payload['json_name']} 和题目草稿。"
-                    )
+                    written = f"{payload['markdown_name']}、{payload['json_name']} 和题目草稿"
+                payload["message"] = f"导出成功。已写入 {written}。位置：{folder}。"
                 return self._send_json(200, payload)
             return self._send_json(404, _error_body("NOT_FOUND", "没有这个地址。", request_id))
 
@@ -367,7 +367,7 @@ def main() -> None:
         raise SystemExit(1) from None
     url = f"http://127.0.0.1:{server.server_address[1]}"
     print(f"核对题页已启动：{url}", flush=True)
-    print(f"日志文件：{logger.path}", flush=True)
+    print(f"日志文件：{logger.file_for()}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -149,6 +149,7 @@ def export_page(
         "page_role": role,
         "answer_count": len(answer_files),
         "backed_up": backed_up,
+        "export_dir": str(dest),
     }
 
 

@@ -34,3 +34,4 @@
 | 2026-11-18 | 启动时用 JSON Schema 检查拆分规则 | 坏规则在打开端口之前拒绝。code 仍是 SPLIT_RULES。不新增包。形状文件不参与和题库的同步 | 仍有效 |
 | 2026-11-18 | 自动保存只写 .reviewed 文件 | .questions.json 和 .answers 只在手动保存或导出时覆盖。自动保存不备份 | 仍有效 |
 | 2026-11-18 | 用过的技能改记在 docs/skills-used.md | SKILL_MAP 只留指针。未核实的目录名不再铺在仓库里。历史句子不改 | 仍有效 |
+| 2026-11-25 | 日志按本机日期写成 logs/app-YYYY-MM-DD.jsonl | 一个文件从开工日一直追加，打开时停在第一天。记录里的 time 仍是 UTC。旧的 logs/app.jsonl 不再追加，也不删除 | 仍有效 |

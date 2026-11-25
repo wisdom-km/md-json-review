@@ -1,4 +1,9 @@
-"""JSON-lines logger. One event is one line. The home directory is redacted."""
+"""JSON-lines logger. One event is one line, in the local calendar day's file.
+
+The constructor path is only the stem, for example logs/app.jsonl. Each event
+appends to logs/app-YYYY-MM-DD.jsonl. The record's time field stays UTC.
+The home directory is redacted.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +28,11 @@ class JsonLogger:
         self.level = LEVELS.get(level.upper(), LEVELS["INFO"])
         path.parent.mkdir(parents=True, exist_ok=True)
 
+    def file_for(self, moment: datetime | None = None) -> Path:
+        when = datetime.now() if moment is None else moment
+        day = when.astimezone().strftime("%Y-%m-%d")
+        return self.path.with_name(f"{self.path.stem}-{day}{self.path.suffix}")
+
     def event(
         self,
         level: str,
@@ -34,8 +44,9 @@ class JsonLogger:
         number = LEVELS.get(level.upper())
         if number is None or number < self.level:
             return
+        now = datetime.now().astimezone()
         record: dict[str, object] = {
-            "time": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            "time": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             "level": level.upper(),
             "event": one_line(event, 80),
             "request_id": one_line(request_id, 64),
@@ -46,6 +57,8 @@ class JsonLogger:
                 continue
             record[key] = value if isinstance(value, (int, float)) else one_line(value)
         line = json.dumps(record, ensure_ascii=False)
-        with self.path.open("a", encoding="utf-8", newline="\n") as handle:
+        path = self.file_for(now)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(line + "\n")
         print(line, flush=True)

@@ -87,8 +87,9 @@ button:disabled {
 .hint { margin: 0; color: #5c564e; font-size: 13px; }
 
 .status, .rules { margin: 0 16px 8px; font-size: 14px; }
-.status[data-state="error"] { color: #8c2f2f; }
-.status[data-state="ok"] { color: #0f6e56; }
+.status { overflow-wrap: anywhere; }
+.status[data-state="error"] { color: #8c2f2f; font-weight: 650; }
+.status[data-state="ok"] { color: #0f6e56; font-weight: 650; }
 
 .workspace {
   display: grid;

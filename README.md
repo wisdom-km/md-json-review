@@ -61,7 +61,7 @@ py -3 scripts/check.py
 
 ## 日志
 
-`logs/app.jsonl`，同时打在终端。每条有 `request_id`。失败时网页上会给出这个编号。日志不记 Markdown 正文，也不记你家目录的绝对路径。
+`logs/app-YYYY-MM-DD.jsonl`，按本机日期一天一个文件，同时打在终端。每条有 `request_id`。失败时网页上会给出这个编号。日志不记 Markdown 正文，也不记你家目录的绝对路径。
 
 ## 数据
 

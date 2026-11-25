@@ -12,7 +12,7 @@ const pageRoleSelect = document.getElementById("page-role");
 const rules = document.getElementById("rules");
 const saveButton = document.getElementById("save");
 const exportButton = document.getElementById("export");
-const pdfFrame = document.getElementById("pdf-frame");
+let pdfFrame = document.getElementById("pdf-frame");
 const pdfLink = document.getElementById("pdf-link");
 
 const SYMBOLS = {
@@ -24,6 +24,8 @@ const SYMBOLS = {
 
 let bookPath = "";
 let pdfPath = "";
+let exportPath = "";
+let shownPdf = "";
 let pages = [];
 let currentRel = "";
 let previewSerial = 0;
@@ -69,7 +71,7 @@ document.addEventListener("keydown", (event) => {
 
 async function choose(kind) {
   setStatus("请在弹出的窗口里选择。", "");
-  const payload = await postJson("/api/pick", {kind});
+  const payload = await postJson("/api/pick", {kind, initial: pickerStart(kind)});
   if (!payload.ok) {
     showFailure(payload);
     return;
@@ -80,14 +82,47 @@ async function choose(kind) {
   }
   if (kind === "book") {
     bookPath = payload.path;
+    rememberPick("book", bookPath);
     bookName.textContent = baseName(payload.path);
     bookName.title = payload.path;
   } else {
     pdfPath = payload.path;
+    rememberPick("pdf", pdfPath);
     pdfName.textContent = baseName(payload.path);
     pdfName.title = payload.path;
   }
   if (bookPath && pdfPath) await openBook();
+}
+
+function pickerStart(kind) {
+  if (kind === "pdf") return folderOf(pdfPath) || storedPick("pdf");
+  if (kind === "book") return bookPath || storedPick("book");
+  return exportPath || storedPick("export");
+}
+
+function storedPick(kind) {
+  try {
+    const value = sessionStorage.getItem("md-json-pick-" + kind) || "";
+    return kind === "pdf" ? folderOf(value) : value;
+  } catch (error) {
+    return "";
+  }
+}
+
+function rememberPick(kind, path) {
+  try {
+    sessionStorage.setItem("md-json-pick-" + kind, path);
+  } catch (error) {
+    return;
+  }
+}
+
+function folderOf(path) {
+  const text = String(path || "").replace(/[\\/]+$/, "");
+  const cut = Math.max(text.lastIndexOf("\\"), text.lastIndexOf("/"));
+  if (cut < 0) return "";
+  const parent = text.slice(0, cut);
+  return parent.endsWith(":") ? parent + "\\" : parent;
 }
 
 async function openBook() {
@@ -144,10 +179,24 @@ async function selectPage(rel) {
   renderSide(payload);
   showJson(payload.preview, payload.preview_error);
   jsonOk = !payload.preview_error;
-  const pageNo = payload.page_no || 1;
-  const frameUrl = "/pdf?page=" + pageNo + "#page=" + pageNo;
-  pdfFrame.src = frameUrl;
+  showPdf(payload.page_no || 1);
+}
+
+function showPdf(pageNo) {
+  const page = pageNo || 1;
+  const frameUrl = "/pdf?v=" + encodeURIComponent(pdfPath) + "&page=" + page + "#page=" + page;
   pdfLink.href = frameUrl;
+  if (shownPdf === pdfPath && pdfFrame.isConnected) {
+    pdfFrame.src = frameUrl;
+    return;
+  }
+  shownPdf = pdfPath;
+  const next = document.createElement("iframe");
+  next.id = "pdf-frame";
+  next.title = "原始 PDF";
+  next.src = frameUrl;
+  pdfFrame.replaceWith(next);
+  pdfFrame = next;
 }
 
 function renderPager() {
@@ -479,7 +528,7 @@ async function saveCurrent(manual) {
 async function exportCurrent() {
   if (!currentRel) return;
   setStatus("请在弹出的窗口里选择导出文件夹。", "");
-  const picked = await postJson("/api/pick", {kind: "export"});
+  const picked = await postJson("/api/pick", {kind: "export", initial: pickerStart("export")});
   if (!picked.ok) {
     showFailure(picked);
     return;
@@ -500,13 +549,15 @@ async function exportCurrent() {
     showFailure(payload);
     return;
   }
+  exportPath = picked.path;
+  rememberPick("export", exportPath);
   const backup = payload.backed_up ? "该文件夹里的旧文件已备份。" : "";
-  setStatus(payload.message + "位置：" + baseName(picked.path) + "。" + backup, "ok");
+  setStatus(payload.message + backup, "ok");
 }
 
 function showFailure(payload) {
   const code = payload.error_code ? "错误编号 " + payload.error_code + "。" : "";
-  const request = payload.request_id ? "请求编号 " + payload.request_id + "。日志在 logs/app.jsonl。" : "";
+  const request = payload.request_id ? "请求编号 " + payload.request_id + "。日志在 logs/app-日期.jsonl。" : "";
   setStatus(code + (payload.message || "没有完成。") + request, "error");
 }
 
@@ -532,6 +583,9 @@ function renderMarkdown(source) {
         index = end + 2;
         continue;
       }
+      pieces.push(escapeHtml("$$"));
+      index += 2;
+      continue;
     }
     if (text[index] === "$") {
       const end = text.indexOf("$", index + 1);
@@ -540,9 +594,17 @@ function renderMarkdown(source) {
         index = end + 1;
         continue;
       }
+      pieces.push(escapeHtml("$"));
+      index += 1;
+      continue;
     }
     const next = text.indexOf("$", index);
     const stop = next < 0 ? text.length : next;
+    if (stop <= index) {
+      pieces.push(escapeHtml(text[index]));
+      index += 1;
+      continue;
+    }
     pieces.push(formatText(text.slice(index, stop)));
     index = stop;
   }

@@ -93,11 +93,39 @@ button:disabled {
 
 .workspace {
   display: grid;
-  grid-template-columns: 1.15fr 1fr 0.9fr;
-  gap: 12px;
+  grid-template-columns: minmax(220px, 1.15fr) 10px minmax(240px, 1fr) minmax(220px, 0.9fr);
+  column-gap: 6px;
   height: calc(100vh - 118px);
   padding: 0 16px 16px;
 }
+
+.workspace.sized {
+  grid-template-columns: var(--pdf-width) 10px minmax(240px, 1fr) minmax(220px, 0.9fr);
+}
+
+.split {
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.split::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: #d9d0c3;
+}
+
+.split:hover::before,
+.split:focus-visible::before,
+.split.dragging::before { background: #0f6e56; }
+
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing iframe { pointer-events: none; }
 
 .pane {
   min-height: 0;
@@ -140,6 +168,9 @@ iframe, textarea, .json, .rendered {
 }
 
 .block {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
   margin: 0;
   padding: 1px 8px;
   border-radius: 6px;
@@ -147,9 +178,33 @@ iframe, textarea, .json, .rendered {
   cursor: text;
 }
 
+.block-text { flex: 1; min-width: 0; }
+
+.line-actions {
+  display: flex;
+  gap: 4px;
+  flex: none;
+  visibility: hidden;
+}
+
+.block:hover .line-actions,
+.block:focus-within .line-actions,
+.block.blank .line-actions { visibility: visible; }
+
+.line-actions button {
+  background: #f6f1e8;
+  color: #5c564e;
+  padding: 0 6px;
+  min-height: 22px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.line-actions button:hover { background: #efe4d4; }
+
 .block:hover { background: #f3efe6; }
 
-.block.blank { min-height: 0.85em; }
+.block.blank { min-height: 1.7em; }
 
 .block-edit {
   display: block;
@@ -219,6 +274,7 @@ iframe, textarea, .json, .rendered {
 #page-role { max-width: 132px; }
 
 @media (max-width: 1100px) {
-  .workspace { grid-template-columns: 1fr; height: auto; }
+  .workspace, .workspace.sized { grid-template-columns: 1fr; height: auto; }
+  .split { display: none; }
   iframe, .json, .rendered { min-height: 280px; }
 }

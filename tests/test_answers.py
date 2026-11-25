@@ -58,6 +58,18 @@ class AnswerSplitTests(unittest.TestCase):
         self.assertTrue(as_questions["ok"])
         self.assertEqual(as_questions["questions"][0]["status"], "needs_confirm")
 
+    def test_choice_answers_on_separate_lines_become_separate_drafts(self):
+        page = "一. 选择题\n1. C\n2. C\n3. A\n"
+        split = split_answers(page, RULES)
+        self.assertEqual(
+            [item["content"] for item in split["answers"]],
+            [
+                [{"type": "text", "value": "C"}],
+                [{"type": "text", "value": "C"}],
+                [{"type": "text", "value": "A"}],
+            ],
+        )
+
     def test_words_and_repeated_letters_need_confirm(self):
         split = split_answers("一. 选择题\n1. 见解析\n2. A,A\n", RULES)
         self.assertEqual(split["answers"][0]["status"], "needs_confirm")

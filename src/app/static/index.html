@@ -26,6 +26,7 @@
           <option value="answers">参考答案页</option>
         </select>
       </div>
+      <button id="undo" type="button" class="secondary" disabled>撤回</button>
       <button id="save" type="button" disabled>保存</button>
       <button id="export" type="button" class="secondary" disabled>导出</button>
     </div>
@@ -39,10 +40,11 @@
       </div>
       <iframe id="pdf-frame" title="原始 PDF" src="about:blank"></iframe>
     </section>
+    <div id="pdf-split" class="split" role="separator" aria-orientation="vertical" aria-label="调整原页宽度" aria-valuemin="220" tabindex="0" title="拖动调整原页宽度"></div>
     <section class="pane" aria-label="Markdown">
       <div class="pane-head">
         <h2>Markdown</h2>
-        <p class="hint">点一行编辑，其余仍是预览</p>
+        <p class="hint">点一行编辑。回车在光标处换行，JSON 会跟着变</p>
       </div>
       <p id="rules" class="rules">打开一页后，这里会写明这一页有几块。</p>
       <div id="markdown-body" class="markdown-body">

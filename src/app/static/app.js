@@ -10,9 +10,10 @@ const drafts = document.getElementById("drafts");
 const draftHeading = document.getElementById("draft-heading");
 const pageRoleSelect = document.getElementById("page-role");
 const rules = document.getElementById("rules");
+const undoButton = document.getElementById("undo");
 const saveButton = document.getElementById("save");
 const exportButton = document.getElementById("export");
-const pdfFrame = document.getElementById("pdf-frame");
+let pdfFrame = document.getElementById("pdf-frame");
 const pdfLink = document.getElementById("pdf-link");
 
 const SYMBOLS = {
@@ -24,6 +25,8 @@ const SYMBOLS = {
 
 let bookPath = "";
 let pdfPath = "";
+let exportPath = "";
+let shownPdf = "";
 let pages = [];
 let currentRel = "";
 let previewSerial = 0;
@@ -36,6 +39,13 @@ let pageReady = false;
 let sourceText = "";
 let blocks = [];
 let editing = -1;
+let undoStack = [];
+let redoStack = [];
+let pendingUndo = "";
+let editRecorded = false;
+let editCaret = null;
+let pickInFlight = false;
+const UNDO_LIMIT = 50;
 let editToken = 0;
 let typeOverrides = {};
 let answerConfirms = {};
@@ -47,8 +57,74 @@ const TYPE_OPTIONS = [
   ["solution", "解答"],
 ];
 
+const PDF_WIDTH_KEY = "md-json-pdf-width";
+const workspace = document.querySelector(".workspace");
+const pdfSplit = document.getElementById("pdf-split");
+
+function clampPdfWidth(px) {
+  const bounds = workspace.getBoundingClientRect();
+  const min = 220;
+  const max = Math.max(min, bounds.width - 10 - 240 - 220);
+  return Math.round(Math.min(max, Math.max(min, px)));
+}
+
+function applyPdfWidth(px, save) {
+  const width = clampPdfWidth(px);
+  workspace.style.setProperty("--pdf-width", width + "px");
+  workspace.classList.add("sized");
+  pdfSplit.setAttribute("aria-valuenow", String(width));
+  if (save) localStorage.setItem(PDF_WIDTH_KEY, String(width));
+}
+
+function restorePdfWidth() {
+  if (window.matchMedia("(max-width: 1100px)").matches) return;
+  const saved = Number(localStorage.getItem(PDF_WIDTH_KEY));
+  if (Number.isFinite(saved) && saved > 0) applyPdfWidth(saved, false);
+}
+
+pdfSplit.addEventListener("pointerdown", (event) => {
+  if (window.matchMedia("(max-width: 1100px)").matches) return;
+  event.preventDefault();
+  pdfSplit.setPointerCapture(event.pointerId);
+  pdfSplit.classList.add("dragging");
+  document.body.classList.add("resizing");
+});
+
+pdfSplit.addEventListener("pointermove", (event) => {
+  if (!pdfSplit.classList.contains("dragging")) return;
+  const left = workspace.getBoundingClientRect().left;
+  applyPdfWidth(event.clientX - left, false);
+});
+
+pdfSplit.addEventListener("pointerup", () => {
+  if (!pdfSplit.classList.contains("dragging")) return;
+  pdfSplit.classList.remove("dragging");
+  document.body.classList.remove("resizing");
+  const current = Number.parseFloat(workspace.style.getPropertyValue("--pdf-width"));
+  if (Number.isFinite(current)) localStorage.setItem(PDF_WIDTH_KEY, String(Math.round(current)));
+});
+
+pdfSplit.addEventListener("keydown", (event) => {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  event.preventDefault();
+  const current = workspace.classList.contains("sized")
+    ? Number.parseFloat(workspace.style.getPropertyValue("--pdf-width"))
+    : workspace.querySelector(".pane").getBoundingClientRect().width;
+  const step = event.key === "ArrowLeft" ? -24 : 24;
+  applyPdfWidth(current + step, true);
+});
+
+window.addEventListener("resize", () => {
+  if (!workspace.classList.contains("sized")) return;
+  const current = Number.parseFloat(workspace.style.getPropertyValue("--pdf-width"));
+  if (Number.isFinite(current)) applyPdfWidth(current, false);
+});
+
+restorePdfWidth();
+
 document.getElementById("pick-book").addEventListener("click", () => choose("book"));
 document.getElementById("pick-pdf").addEventListener("click", () => choose("pdf"));
+undoButton.addEventListener("click", () => undoEdit());
 saveButton.addEventListener("click", () => enqueueSave(true));
 exportButton.addEventListener("click", () => exportCurrent());
 pageRoleSelect.addEventListener("change", () => {
@@ -61,6 +137,18 @@ nextButton.addEventListener("click", () => step(1));
 pageSelect.addEventListener("change", () => goTo(pageSelect.value));
 
 document.addEventListener("keydown", (event) => {
+  const typing = event.target.closest("textarea, input");
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && !typing) {
+    event.preventDefault();
+    if (event.shiftKey) redoEdit();
+    else undoEdit();
+    return;
+  }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y" && !typing) {
+    event.preventDefault();
+    redoEdit();
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && event.key === "s") {
     event.preventDefault();
     enqueueSave(true);
@@ -68,8 +156,18 @@ document.addEventListener("keydown", (event) => {
 });
 
 async function choose(kind) {
+  if (pickInFlight) {
+    setStatus("选择窗口还开着。先在那个窗口里选好，或点取消。", "");
+    return;
+  }
+  pickInFlight = true;
   setStatus("请在弹出的窗口里选择。", "");
-  const payload = await postJson("/api/pick", {kind});
+  let payload;
+  try {
+    payload = await postJson("/api/pick", {kind, initial: pickerStart(kind)});
+  } finally {
+    pickInFlight = false;
+  }
   if (!payload.ok) {
     showFailure(payload);
     return;
@@ -80,14 +178,47 @@ async function choose(kind) {
   }
   if (kind === "book") {
     bookPath = payload.path;
+    rememberPick("book", bookPath);
     bookName.textContent = baseName(payload.path);
     bookName.title = payload.path;
   } else {
     pdfPath = payload.path;
+    rememberPick("pdf", pdfPath);
     pdfName.textContent = baseName(payload.path);
     pdfName.title = payload.path;
   }
   if (bookPath && pdfPath) await openBook();
+}
+
+function pickerStart(kind) {
+  if (kind === "pdf") return folderOf(pdfPath) || storedPick("pdf");
+  if (kind === "book") return bookPath || storedPick("book");
+  return exportPath || storedPick("export");
+}
+
+function storedPick(kind) {
+  try {
+    const value = sessionStorage.getItem("md-json-pick-" + kind) || "";
+    return kind === "pdf" ? folderOf(value) : value;
+  } catch (error) {
+    return "";
+  }
+}
+
+function rememberPick(kind, path) {
+  try {
+    sessionStorage.setItem("md-json-pick-" + kind, path);
+  } catch (error) {
+    return;
+  }
+}
+
+function folderOf(path) {
+  const text = String(path || "").replace(/[\\/]+$/, "");
+  const cut = Math.max(text.lastIndexOf("\\"), text.lastIndexOf("/"));
+  if (cut < 0) return "";
+  const parent = text.slice(0, cut);
+  return parent.endsWith(":") ? parent + "\\" : parent;
 }
 
 async function openBook() {
@@ -139,15 +270,29 @@ async function selectPage(rel) {
   dirty = false;
   saveButton.textContent = "保存";
   const loadedNote = payload.loaded_from === "reviewed" ? "正在继续改已保存的稿" : "正在从原始 Markdown 开始";
-  rules.textContent = `${payload.label}：原 JSON 有 ${payload.block_count} 块。${loadedNote}。点一行即可改。多块时，块与块之间单独一行写 ---。`;
+  rules.textContent = `${payload.label}：原 JSON 有 ${payload.block_count} 块。${loadedNote}。点一行即可改。回车在光标处换行，JSON 会按新的行再拆。行尾可以删除这一行，或去掉它后面的内容。多块时，块与块之间单独一行写 ---。`;
   renderLive();
   renderSide(payload);
   showJson(payload.preview, payload.preview_error);
   jsonOk = !payload.preview_error;
-  const pageNo = payload.page_no || 1;
-  const frameUrl = "/pdf?page=" + pageNo + "#page=" + pageNo;
-  pdfFrame.src = frameUrl;
+  showPdf(payload.page_no || 1);
+}
+
+function showPdf(pageNo) {
+  const page = pageNo || 1;
+  const frameUrl = "/pdf?v=" + encodeURIComponent(pdfPath) + "&page=" + page + "#page=" + page;
   pdfLink.href = frameUrl;
+  if (shownPdf === pdfPath && pdfFrame.isConnected) {
+    pdfFrame.src = frameUrl;
+    return;
+  }
+  shownPdf = pdfPath;
+  const next = document.createElement("iframe");
+  next.id = "pdf-frame";
+  next.title = "原始 PDF";
+  next.src = frameUrl;
+  pdfFrame.replaceWith(next);
+  pdfFrame = next;
 }
 
 function renderPager() {
@@ -169,6 +314,48 @@ function setSource(text) {
   sourceText = String(text ?? "");
   blocks = sourceToBlocks(sourceText);
   editing = -1;
+  undoStack = [];
+  redoStack = [];
+  editRecorded = false;
+  updateUndoButton();
+}
+
+function pushUndo(text) {
+  const value = String(text ?? "");
+  if (undoStack.length && undoStack[undoStack.length - 1] === value) return;
+  undoStack.push(value);
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  redoStack = [];
+  updateUndoButton();
+}
+
+function updateUndoButton() {
+  undoButton.disabled = undoStack.length === 0;
+}
+
+function undoEdit() {
+  if (!undoStack.length) return;
+  redoStack.push(blocksToSource(blocks));
+  applyHistory(undoStack.pop(), "已撤回。");
+}
+
+function redoEdit() {
+  if (!redoStack.length) return;
+  undoStack.push(blocksToSource(blocks));
+  applyHistory(redoStack.pop(), "已恢复。");
+  updateUndoButton();
+}
+
+function applyHistory(text, message) {
+  editToken += 1;
+  editing = -1;
+  editRecorded = false;
+  sourceText = text;
+  blocks = sourceToBlocks(text);
+  updateUndoButton();
+  renderLive();
+  noteEdit();
+  setStatus(message, "ok");
 }
 
 function sourceToBlocks(text) {
@@ -191,14 +378,23 @@ function renderLive() {
       box.value = block.text;
       box.rows = 1;
       box.addEventListener("input", () => {
+        if (!editRecorded) {
+          pushUndo(pendingUndo);
+          editRecorded = true;
+        }
         block.text = box.value;
         fitLine(box);
         noteEdit();
       });
       box.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" || (event.key === "Enter" && !event.shiftKey)) {
+        if (event.key === "Escape") {
           event.preventDefault();
           box.blur();
+          return;
+        }
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          splitEditingLine(box);
         }
       });
       box.addEventListener("blur", () => {
@@ -216,12 +412,27 @@ function renderLive() {
       rendered.appendChild(box);
       fitLine(box);
       box.focus();
+      if (editCaret !== null) {
+        const caret = editCaret;
+        editCaret = null;
+        box.setSelectionRange(caret, caret);
+      }
       return;
     }
     const row = document.createElement("div");
     row.className = block.text.trim() === "" ? "block blank" : "block";
-    row.innerHTML = block.text.trim() === "" ? "" : renderMarkdown(block.text);
+    const text = document.createElement("div");
+    text.className = "block-text";
+    text.innerHTML = block.text.trim() === "" ? "" : renderMarkdown(block.text);
+    const actions = document.createElement("div");
+    actions.className = "line-actions";
+    actions.append(
+      lineButton("删除", "删除这一行", () => removeLines(index, false)),
+      lineButton("后面去掉", "去掉这一行后面的内容", () => removeLines(index, true)),
+    );
+    row.append(text, actions);
     row.addEventListener("mousedown", (event) => {
+      if (event.target.closest("button")) return;
       event.preventDefault();
       openBlock(index);
     });
@@ -230,7 +441,35 @@ function renderLive() {
   rendered.scrollTop = scroll;
 }
 
+function lineButton(label, name, action) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.setAttribute("aria-label", name);
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    action();
+  });
+  return button;
+}
+
+function removeLines(index, afterOnly) {
+  const start = afterOnly ? index + 1 : index;
+  const count = blocks.length - start;
+  if (count <= 0) return;
+  if (afterOnly && !window.confirm("这一行留下。它后面的文字和空行都会从这一页去掉。")) return;
+  pushUndo(blocksToSource(blocks));
+  blocks.splice(start, count);
+  if (editing >= start) editing = -1;
+  sourceText = blocksToSource(blocks);
+  noteEdit();
+  renderLive();
+}
+
 function openBlock(index) {
+  pendingUndo = blocksToSource(blocks);
+  editRecorded = false;
   editToken += 1;
   sourceText = blocksToSource(blocks);
   editing = index;
@@ -240,6 +479,23 @@ function openBlock(index) {
 function fitLine(box) {
   box.style.height = "auto";
   box.style.height = box.scrollHeight + "px";
+}
+
+function splitEditingLine(box) {
+  const start = box.selectionStart;
+  const end = box.selectionEnd;
+  const value = box.value;
+  if (!editRecorded) {
+    pushUndo(pendingUndo);
+    editRecorded = true;
+  }
+  blocks.splice(editing, 1, {text: value.slice(0, start)}, {text: value.slice(end)});
+  editing += 1;
+  editRecorded = false;
+  pendingUndo = blocksToSource(blocks);
+  editCaret = 0;
+  noteEdit();
+  renderLive();
 }
 
 function noteEdit() {
@@ -477,9 +733,24 @@ async function saveCurrent(manual) {
 }
 
 async function exportCurrent() {
-  if (!currentRel) return;
+  if (!currentRel) {
+    setStatus("先选择书目录和 PDF，打开一页后再导出。", "");
+    return;
+  }
+  if (pickInFlight) {
+    setStatus("选择窗口还开着。先在那个窗口里选好，或点取消。", "");
+    return;
+  }
+  pickInFlight = true;
+  exportButton.disabled = true;
   setStatus("请在弹出的窗口里选择导出文件夹。", "");
-  const picked = await postJson("/api/pick", {kind: "export"});
+  let picked;
+  try {
+    picked = await postJson("/api/pick", {kind: "export", initial: pickerStart("export")});
+  } finally {
+    pickInFlight = false;
+    if (pageReady) exportButton.disabled = false;
+  }
   if (!picked.ok) {
     showFailure(picked);
     return;
@@ -500,13 +771,22 @@ async function exportCurrent() {
     showFailure(payload);
     return;
   }
+  exportPath = picked.path;
+  rememberPick("export", exportPath);
   const backup = payload.backed_up ? "该文件夹里的旧文件已备份。" : "";
-  setStatus(payload.message + "位置：" + baseName(picked.path) + "。" + backup, "ok");
+  setStatus(payload.message + backup, "ok");
 }
 
 function showFailure(payload) {
+  if (payload.error_code === "NO_BOOK") {
+    pageReady = false;
+    saveButton.disabled = true;
+    exportButton.disabled = true;
+    setStatus("这次服务里还没有书目录。请再选一次书目录和 PDF，然后再导出。", "error");
+    return;
+  }
   const code = payload.error_code ? "错误编号 " + payload.error_code + "。" : "";
-  const request = payload.request_id ? "请求编号 " + payload.request_id + "。日志在 logs/app.jsonl。" : "";
+  const request = payload.request_id ? "请求编号 " + payload.request_id + "。日志在 logs/app-日期.jsonl。" : "";
   setStatus(code + (payload.message || "没有完成。") + request, "error");
 }
 
@@ -532,6 +812,9 @@ function renderMarkdown(source) {
         index = end + 2;
         continue;
       }
+      pieces.push(escapeHtml("$$"));
+      index += 2;
+      continue;
     }
     if (text[index] === "$") {
       const end = text.indexOf("$", index + 1);
@@ -540,9 +823,17 @@ function renderMarkdown(source) {
         index = end + 1;
         continue;
       }
+      pieces.push(escapeHtml("$"));
+      index += 1;
+      continue;
     }
     const next = text.indexOf("$", index);
     const stop = next < 0 ? text.length : next;
+    if (stop <= index) {
+      pieces.push(escapeHtml(text[index]));
+      index += 1;
+      continue;
+    }
     pieces.push(formatText(text.slice(index, stop)));
     index = stop;
   }
@@ -562,7 +853,45 @@ function formatText(text) {
 }
 
 function inline(text) {
-  return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  return renderBareFractions(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+
+function renderBareFractions(text) {
+  let html = "";
+  let index = 0;
+  while (index < text.length) {
+    const taken = takeFraction(text, index);
+    if (taken) {
+      html += `<span class="math"><span class="frac"><span class="num">${renderTex(taken.numerator)}</span><span class="den">${renderTex(taken.denominator)}</span></span></span>`;
+      index = taken.end;
+      continue;
+    }
+    const next = text.indexOf("\\", index);
+    const stop = next < 0 ? text.length : next;
+    if (stop <= index) {
+      html += escapeHtml(text[index]);
+      index += 1;
+      continue;
+    }
+    html += escapeHtml(text.slice(index, stop));
+    index = stop;
+  }
+  return html;
+}
+
+function takeFraction(text, index) {
+  const command = text.startsWith("\\dfrac", index)
+    ? "\\dfrac"
+    : text.startsWith("\\tfrac", index)
+      ? "\\tfrac"
+      : text.startsWith("\\frac", index)
+        ? "\\frac"
+        : "";
+  if (!command || text[index + command.length] !== "{") return null;
+  const numerator = readBrace(text, index + command.length);
+  if (text[numerator.end] !== "{") return null;
+  const denominator = readBrace(text, numerator.end);
+  return {end: denominator.end, numerator: numerator.body, denominator: denominator.body};
 }
 
 function renderTex(tex) {

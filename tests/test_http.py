@@ -55,6 +55,7 @@ class HttpTests(unittest.TestCase):
                     {"rel": rel, "markdown": "改过的正文\n"},
                 )
                 self.assertTrue(saved["ok"], saved)
+                self.assertIn("保存成功", saved["message"])
                 original = (book / rel).read_text(encoding="utf-8")
                 self.assertEqual(original, "旧\n")
                 reviewed = book / saved["reviewed_json"]
@@ -64,9 +65,11 @@ class HttpTests(unittest.TestCase):
                 self.assertFalse(drill["ok"])
                 self.assertEqual(drill["error_code"], "DRILL")
                 self.assertEqual(drill["code"], "DRILL")
+                daily = logger.file_for()
+                self.assertFalse(log_path.exists())
                 lines = [
                     json.loads(line)
-                    for line in log_path.read_text(encoding="utf-8").splitlines()
+                    for line in daily.read_text(encoding="utf-8").splitlines()
                 ]
                 drill_lines = [line for line in lines if line["request_id"] == drill["request_id"]]
                 modules = {line["module"] for line in drill_lines}
@@ -77,7 +80,27 @@ class HttpTests(unittest.TestCase):
                 save_modules = {line["module"] for line in save_lines}
                 self.assertIn("core.convert", save_modules)
                 self.assertIn("app.store", save_modules)
-                self.assertNotIn("改过的正文", log_path.read_text(encoding="utf-8"))
+                self.assertNotIn("改过的正文", daily.read_text(encoding="utf-8"))
+                other = book / "other.pdf"
+                other.write_bytes(b"%PDF-other\n")
+                reopened = post(
+                    base + "/api/open",
+                    {"book_dir": str(book), "pdf_path": str(other)},
+                )
+                self.assertTrue(reopened["ok"], reopened)
+                with urllib.request.urlopen(base + "/pdf?v=other&page=1") as response:
+                    self.assertEqual(response.read(), b"%PDF-other\n")
+                    self.assertEqual(response.headers.get("Cache-Control"), "no-store")
+                dest = Path(temporary) / "out"
+                dest.mkdir()
+                exported = post(
+                    base + "/api/export",
+                    {"rel": rel, "markdown": "改过的正文\n", "export_dir": str(dest)},
+                )
+                self.assertTrue(exported["ok"], exported)
+                self.assertIn("导出成功", exported["message"])
+                self.assertIn(str(dest.resolve()), exported["message"])
+                self.assertNotIn(str(dest.resolve()), daily.read_text(encoding="utf-8"))
             finally:
                 server.shutdown()
                 server.server_close()

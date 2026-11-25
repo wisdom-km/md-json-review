@@ -17,7 +17,23 @@ _TITLES = {
 }
 
 
-def pick_path(kind: str) -> str:
+def starting_folder(raw: str) -> str:
+    """The folder a picker should open. A file path uses its parent. Missing paths do not."""
+    text = str(raw or "").strip().strip("\ufeff")
+    if not text:
+        return ""
+    try:
+        path = Path(text)
+        if path.is_file():
+            path = path.parent
+        if path.is_dir():
+            return str(path.resolve())
+    except OSError:
+        return ""
+    return ""
+
+
+def pick_path(kind: str, initial: str = "") -> str:
     """Open a folder or PDF dialog. An empty string means the user cancelled."""
     if kind not in _TITLES:
         raise ConvertError("BAD_REQUEST", "不知道要选择什么。")
@@ -27,6 +43,7 @@ def pick_path(kind: str) -> str:
     env = os.environ.copy()
     env["MD_JSON_PICK_OUT"] = str(out)
     env["MD_JSON_PICK_KIND"] = kind
+    env["MD_JSON_PICK_INITIAL"] = starting_folder(initial)
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
         completed = subprocess.run(
@@ -241,15 +258,18 @@ public class MdJsonFolderDialog {
     }
 }
 '@
-  $desktop = [Environment]::GetFolderPath("Desktop")
+  $initial = $env:MD_JSON_PICK_INITIAL
+  if ([string]::IsNullOrWhiteSpace($initial)) {
+    $initial = [Environment]::GetFolderPath("Desktop")
+  }
   if ($env:MD_JSON_PICK_KIND -eq "__compile") {
     $path = [MdJsonFolderDialog]::Prepare()
   } elseif ($env:MD_JSON_PICK_KIND -eq "pdf") {
-    $path = [MdJsonFolderDialog]::PickFile($owner.Handle, "选择原始 PDF", $desktop)
+    $path = [MdJsonFolderDialog]::PickFile($owner.Handle, "选择原始 PDF", $initial)
   } else {
     $title = "选择 OCR 书目录"
     if ($env:MD_JSON_PICK_KIND -eq "export") { $title = "选择导出文件夹" }
-    $path = [MdJsonFolderDialog]::Pick($owner.Handle, $title, $desktop)
+    $path = [MdJsonFolderDialog]::Pick($owner.Handle, $title, $initial)
   }
 } finally {
   if ($null -ne $owner) { $owner.Dispose() }
@@ -260,5 +280,5 @@ public class MdJsonFolderDialog {
 
 
 if sys.platform != "win32":  # pragma: no cover - this tool runs on the user's Windows PC
-    def pick_path(kind: str) -> str:  # type: ignore[misc]
+    def pick_path(kind: str, initial: str = "") -> str:  # type: ignore[misc]
         raise ConvertError("PICK_FAILED", "选择窗口只在 Windows 上打开。")
